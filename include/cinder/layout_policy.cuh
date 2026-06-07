@@ -6,14 +6,48 @@
 #include <concepts>
 #include <cstddef>
 #include <limits>
-#include <ranges>
-#include <stdexcept>
 #include <type_traits>
 
 namespace cinder
 {
     namespace detail
     {
+        /**
+         * @brief 返回形状长度（shape size helper）。Return shape size.
+         *
+         * @tparam Shape 形状范围类型（shape range type）。The shape range type.
+         * @param shape 形状范围（shape range）。The shape range.
+         * @return 形状长度（shape size）。The shape size.
+         */
+        template <typename Shape>
+        [[nodiscard]] CINDER_HOST_DEVICE constexpr auto shape_size(const Shape &shape) noexcept -> std::size_t
+        {
+            static_assert(requires {
+                              shape.size();
+                          },
+                          "Tensor layout shape must provide size() for host/device storage checks.");
+            return static_cast<std::size_t>(shape.size());
+        }
+
+        /**
+         * @brief 按轴读取形状长度（shape extent helper）。Read one shape extent by axis.
+         *
+         * @tparam Shape 形状范围类型（shape range type）。The shape range type.
+         * @param shape 形状范围（shape range）。The shape range.
+         * @param axis 轴编号（axis number）。The axis number.
+         * @return 指定轴的长度（extent on the requested axis）。The extent on the requested axis.
+         */
+        template <typename Shape>
+        [[nodiscard]] CINDER_HOST_DEVICE constexpr decltype(auto) shape_extent(const Shape &shape,
+                                                                              std::size_t axis) noexcept
+        {
+            static_assert(requires {
+                              shape[axis];
+                          },
+                          "Tensor layout shape must provide operator[] for host/device storage checks.");
+            return shape[axis];
+        }
+
         /**
          * @brief 带显式存储大小的布局（layout with explicit storage size）。Layout with explicit storage size.
          *
@@ -34,21 +68,25 @@ namespace cinder
          * @return 紧致线性元素数量（dense linear element count）。The dense linear element count.
          */
         template <LayoutLike Layout>
-        [[nodiscard]] auto dense_storage_size(const Layout &layout) -> layout_offset_t<Layout>
+        [[nodiscard]] CINDER_HOST_DEVICE constexpr auto dense_storage_size(const Layout &layout) noexcept
+            -> layout_offset_t<Layout>
         {
             using offset_type = layout_offset_t<Layout>;
 
             offset_type total{1U};
-            for (const auto extent_ref : layout.shape())
+            const auto &shape = layout.shape();
+            const std::size_t rank = shape_size(shape);
+            for (std::size_t axis{0U}; axis < rank; ++axis)
             {
-                const auto extent = static_cast<offset_type>(extent_ref);
+                const auto extent = static_cast<offset_type>(shape_extent(shape, axis));
                 if (extent == offset_type{0U})
                 {
                     return offset_type{0U};
                 }
                 if (total > (std::numeric_limits<offset_type>::max() / extent))
                 {
-                    throw std::length_error{"cinder::Tensor layout shape overflows offset_type"};
+                    CINDER_ASSERT(false);
+                    return offset_type{0U};
                 }
                 total = static_cast<offset_type>(total * extent);
             }
@@ -68,7 +106,8 @@ namespace cinder
          *       is used as dense storage size.
          */
         template <LayoutLike Layout>
-        [[nodiscard]] auto layout_storage_size(const Layout &layout) -> layout_offset_t<Layout>
+        [[nodiscard]] CINDER_HOST_DEVICE constexpr auto layout_storage_size(const Layout &layout) noexcept
+            -> layout_offset_t<Layout>
         {
             if constexpr (HasStorageSize<Layout>)
             {
@@ -89,23 +128,23 @@ namespace cinder
          * @return 若索引长度和各轴坐标均合法则为 true。True when rank and coordinates are in bounds.
          */
         template <LayoutLike Layout>
-        [[nodiscard]] auto index_in_shape(const Layout &layout,
-                                          IndexView<layout_index_t<Layout>> index) -> bool
+        [[nodiscard]] CINDER_HOST_DEVICE constexpr auto index_in_shape(
+            const Layout &layout,
+            IndexView<layout_index_t<Layout>> index) noexcept -> bool
         {
-            if (index.size() != std::ranges::size(layout.shape()))
+            const auto &shape = layout.shape();
+            if (index.size() != shape_size(shape))
             {
                 return false;
             }
 
-            std::size_t axis{0U};
-            for (const auto extent_ref : layout.shape())
+            for (std::size_t axis{0U}; axis < index.size(); ++axis)
             {
-                const auto extent = static_cast<layout_index_t<Layout>>(extent_ref);
+                const auto extent = static_cast<layout_index_t<Layout>>(shape_extent(shape, axis));
                 if (index[axis] >= extent)
                 {
                     return false;
                 }
-                ++axis;
             }
 
             return true;

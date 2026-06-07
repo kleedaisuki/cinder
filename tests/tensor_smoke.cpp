@@ -293,6 +293,10 @@ namespace
 
         tensor(1, 2) = 42;
         assert(tensor.at(1, 2) == 42);
+
+        const int values[]{10, 11, 12, 13, 14, 15};
+        cinder::Tensor<int, Layout> from_pointer{Layout{2U, 3U}, values, 6U};
+        assert(from_pointer(1, 2) == 15);
     }
 
     /**

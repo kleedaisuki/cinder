@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <concepts>
 #include <cstddef>
 #include <memory>
@@ -21,6 +22,17 @@
 #else
 #define CINDER_HOST_DEVICE
 #endif
+
+/**
+ * @brief 断言检查宏（assertion macro）。Assertion macro.
+ *
+ * @param condition 必须为真的条件（condition that must hold）。The condition that must hold.
+ *
+ * @note CUDA/HIP device 侧也支持 `assert` 的受限形式；这里统一用一个宏表达 Tensor 的防御性不变量
+ *       （defensive invariant）。CUDA/HIP device code supports a limited form of `assert`; this macro gives
+ *       Tensor one spelling for defensive invariants across execution spaces.
+ */
+#define CINDER_ASSERT(condition) assert(condition)
 
 namespace cinder
 {

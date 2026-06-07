@@ -4,16 +4,12 @@
 #include "cinder/concepts.cuh"
 #include "cinder/layout_policy.cuh"
 
-#include <algorithm>
 #include <array>
 #include <concepts>
 #include <cstddef>
 #include <initializer_list>
 #include <memory>
-#include <ranges>
-#include <stdexcept>
 #include <type_traits>
-#include <utility>
 
 namespace cinder
 {
@@ -25,8 +21,8 @@ namespace cinder
      * @tparam Allocator 分配器策略类型（allocator policy type）。The allocator policy type.
      *
      * @note `Layout` 负责把多重索引（multi-index）映射为线性偏移（linear offset）；`Allocator` 通过
-     *       `std::allocator_traits` 申请、构造、销毁和释放线性内存。`Layout` maps multi-indices to
-     *       linear offsets; `Allocator` is mediated by `std::allocator_traits` for allocation,
+     *       `cinder::AllocatorTraits` 申请、构造、销毁和释放线性内存。`Layout` maps multi-indices to
+     *       linear offsets; `Allocator` is mediated by `cinder::AllocatorTraits` for allocation,
      *       construction, destruction, and deallocation.
      */
     template <typename Value,
@@ -58,7 +54,7 @@ namespace cinder
         /**
          * @brief 分配器 traits 类型（allocator traits type）。The allocator traits type.
          */
-        using allocator_traits = std::allocator_traits<allocator_type>;
+        using allocator_traits = AllocatorTraits<allocator_type>;
 
         /**
          * @brief 分配器指针类型（allocator pointer type）。The allocator pointer type.
@@ -96,7 +92,7 @@ namespace cinder
          * @note 仅当布局和分配器都可默认构造（default constructible）时可用。This overload is available
          *       only when both layout and allocator are default constructible.
          */
-        Tensor()
+        CINDER_HOST_DEVICE Tensor()
             requires(std::default_initializable<layout_type> &&
                      std::default_initializable<allocator_type>)
             : Tensor{layout_type{}, allocator_type{}}
@@ -109,9 +105,9 @@ namespace cinder
          * @param layout 布局对象（layout object）。The layout object.
          * @param allocator 分配器对象（allocator object）。The allocator object.
          */
-        explicit Tensor(layout_type layout,
-                        const allocator_type &allocator = allocator_type{})
-            : layout_{std::move(layout)},
+        CINDER_HOST_DEVICE explicit Tensor(layout_type layout,
+                                           const allocator_type &allocator = allocator_type{})
+            : layout_{static_cast<layout_type &&>(layout)},
               allocator_{allocator}
         {
             initialize_default(checked_storage_size(layout_, allocator_));
@@ -124,10 +120,10 @@ namespace cinder
          * @param value 填充值（fill value）。The fill value.
          * @param allocator 分配器对象（allocator object）。The allocator object.
          */
-        Tensor(layout_type layout,
-               const value_type &value,
-               const allocator_type &allocator = allocator_type{})
-            : layout_{std::move(layout)},
+        CINDER_HOST_DEVICE Tensor(layout_type layout,
+                                  const value_type &value,
+                                  const allocator_type &allocator = allocator_type{})
+            : layout_{static_cast<layout_type &&>(layout)},
               allocator_{allocator}
         {
             initialize_fill(checked_storage_size(layout_, allocator_), value);
@@ -140,38 +136,43 @@ namespace cinder
          * @param values 初始值列表（initializer list）。The initializer list.
          * @param allocator 分配器对象（allocator object）。The allocator object.
          */
-        Tensor(layout_type layout,
-               std::initializer_list<value_type> values,
-               const allocator_type &allocator = allocator_type{})
-            : layout_{std::move(layout)},
+        CINDER_HOST_DEVICE Tensor(layout_type layout,
+                                  std::initializer_list<value_type> values,
+                                  const allocator_type &allocator = allocator_type{})
+            : layout_{static_cast<layout_type &&>(layout)},
               allocator_{allocator}
         {
             const size_type element_count = checked_storage_size(layout_, allocator_);
             if (values.size() != static_cast<std::size_t>(element_count))
             {
-                throw std::length_error{"cinder::Tensor initializer count does not match layout storage size"};
+                CINDER_ASSERT(false);
+                return;
             }
-            initialize_range(element_count, values);
+            initialize_copy(element_count, values.begin());
         }
 
         /**
-         * @brief 从输入范围创建张量（range-based tensor construction）。Create a tensor from an input range.
+         * @brief 从原始数组创建张量（raw-array tensor construction）。Create a tensor from a raw array.
          *
-         * @tparam Range 输入范围类型（input range type）。The input range type.
          * @param layout 布局对象（layout object）。The layout object.
-         * @param values 初始值范围（initial value range）。The initial value range.
+         * @param values 初始值首地址（initial value pointer）。The initial value pointer.
+         * @param value_count 初始值数量（initial value count）。The initial value count.
          * @param allocator 分配器对象（allocator object）。The allocator object.
          */
-        template <std::ranges::input_range Range>
-            requires(!std::same_as<std::remove_cvref_t<Range>, Tensor>) &&
-                        std::convertible_to<std::ranges::range_reference_t<Range>, value_type>
-        Tensor(layout_type layout,
-               Range &&values,
-               const allocator_type &allocator = allocator_type{})
-            : layout_{std::move(layout)},
+        CINDER_HOST_DEVICE Tensor(layout_type layout,
+                                  const value_type *values,
+                                  size_type value_count,
+                                  const allocator_type &allocator = allocator_type{})
+            : layout_{static_cast<layout_type &&>(layout)},
               allocator_{allocator}
         {
-            initialize_range(checked_storage_size(layout_, allocator_), std::forward<Range>(values));
+            const size_type element_count = checked_storage_size(layout_, allocator_);
+            if (value_count != element_count)
+            {
+                CINDER_ASSERT(false);
+                return;
+            }
+            initialize_copy(element_count, values);
         }
 
         /**
@@ -179,7 +180,7 @@ namespace cinder
          *
          * @param other 源张量（source tensor）。The source tensor.
          */
-        Tensor(const Tensor &other)
+        CINDER_HOST_DEVICE Tensor(const Tensor &other)
             : layout_{other.layout_},
               allocator_{allocator_traits::select_on_container_copy_construction(other.allocator_)}
         {
@@ -191,19 +192,21 @@ namespace cinder
          *
          * @param other 源张量（source tensor）。The source tensor.
          */
-        Tensor(Tensor &&other) noexcept(std::is_nothrow_move_constructible_v<layout_type> &&
-                                        std::is_nothrow_move_constructible_v<allocator_type>)
-            : layout_{std::move(other.layout_)},
-              allocator_{std::move(other.allocator_)},
-              data_{std::exchange(other.data_, pointer{})},
-              size_{std::exchange(other.size_, size_type{0U})}
+        CINDER_HOST_DEVICE Tensor(Tensor &&other) noexcept(std::is_nothrow_move_constructible_v<layout_type> &&
+                                                           std::is_nothrow_move_constructible_v<allocator_type>)
+            : layout_{static_cast<layout_type &&>(other.layout_)},
+              allocator_{static_cast<allocator_type &&>(other.allocator_)},
+              data_{other.data_},
+              size_{other.size_}
         {
+            other.data_ = pointer{};
+            other.size_ = size_type{0U};
         }
 
         /**
          * @brief 销毁张量（destruction）。Destroy the tensor.
          */
-        ~Tensor()
+        CINDER_HOST_DEVICE ~Tensor()
         {
             release();
         }
@@ -214,7 +217,7 @@ namespace cinder
          * @param other 源张量（source tensor）。The source tensor.
          * @return 当前张量引用（reference to this tensor）。A reference to this tensor.
          */
-        auto operator=(const Tensor &other) -> Tensor &
+        CINDER_HOST_DEVICE auto operator=(const Tensor &other) -> Tensor &
         {
             if (this == &other)
             {
@@ -244,7 +247,7 @@ namespace cinder
          * @param other 源张量（source tensor）。The source tensor.
          * @return 当前张量引用（reference to this tensor）。A reference to this tensor.
          */
-        auto operator=(Tensor &&other) -> Tensor &
+        CINDER_HOST_DEVICE auto operator=(Tensor &&other) -> Tensor &
         {
             if (this == &other)
             {
@@ -254,7 +257,7 @@ namespace cinder
             if constexpr (allocator_traits::propagate_on_container_move_assignment::value)
             {
                 release();
-                allocator_ = std::move(other.allocator_);
+                allocator_ = static_cast<allocator_type &&>(other.allocator_);
                 adopt_storage_from(other);
             }
             else if constexpr (allocator_traits::is_always_equal::value)
@@ -298,7 +301,7 @@ namespace cinder
          *
          * @return 分配器常量引用（const reference to allocator）。A const reference to the allocator.
          */
-        [[nodiscard]] auto allocator() const noexcept -> const allocator_type &
+        [[nodiscard]] CINDER_HOST_DEVICE constexpr auto allocator() const noexcept -> const allocator_type &
         {
             return allocator_;
         }
@@ -328,9 +331,9 @@ namespace cinder
          *
          * @return 形状范围大小（shape range size）。The size of the shape range.
          */
-        [[nodiscard]] auto rank() const noexcept -> std::size_t
+        [[nodiscard]] CINDER_HOST_DEVICE constexpr auto rank() const noexcept -> std::size_t
         {
-            return std::ranges::size(shape());
+            return detail::shape_size(shape());
         }
 
         /**
@@ -435,7 +438,7 @@ namespace cinder
         template <typename... Indices>
             requires(sizeof...(Indices) > 0U) &&
                     (std::integral<std::remove_cvref_t<Indices>> && ...)
-        [[nodiscard]] constexpr auto operator()(Indices... indices) noexcept -> reference
+        [[nodiscard]] CINDER_HOST_DEVICE constexpr auto operator()(Indices... indices) noexcept -> reference
         {
             const std::array<index_type, sizeof...(Indices)> multi_index{
                 static_cast<index_type>(indices)...};
@@ -452,7 +455,7 @@ namespace cinder
         template <typename... Indices>
             requires(sizeof...(Indices) > 0U) &&
                     (std::integral<std::remove_cvref_t<Indices>> && ...)
-        [[nodiscard]] constexpr auto operator()(Indices... indices) const noexcept -> const_reference
+        [[nodiscard]] CINDER_HOST_DEVICE constexpr auto operator()(Indices... indices) const noexcept -> const_reference
         {
             const std::array<index_type, sizeof...(Indices)> multi_index{
                 static_cast<index_type>(indices)...};
@@ -465,7 +468,7 @@ namespace cinder
          * @param index 多重索引视图（multi-index view）。The multi-index view.
          * @return 元素引用（element reference）。A reference to the element.
          */
-        [[nodiscard]] auto at(IndexView<index_type> index) -> reference
+        [[nodiscard]] CINDER_HOST_DEVICE auto at(IndexView<index_type> index) -> reference
         {
             check_index(index);
             return (*this)(index);
@@ -477,7 +480,7 @@ namespace cinder
          * @param index 多重索引视图（multi-index view）。The multi-index view.
          * @return 元素常量引用（const element reference）。A const reference to the element.
          */
-        [[nodiscard]] auto at(IndexView<index_type> index) const -> const_reference
+        [[nodiscard]] CINDER_HOST_DEVICE auto at(IndexView<index_type> index) const -> const_reference
         {
             check_index(index);
             return (*this)(index);
@@ -493,7 +496,7 @@ namespace cinder
         template <typename... Indices>
             requires(sizeof...(Indices) > 0U) &&
                     (std::integral<std::remove_cvref_t<Indices>> && ...)
-        [[nodiscard]] auto at(Indices... indices) -> reference
+        [[nodiscard]] CINDER_HOST_DEVICE auto at(Indices... indices) -> reference
         {
             const std::array<index_type, sizeof...(Indices)> multi_index{
                 static_cast<index_type>(indices)...};
@@ -510,7 +513,7 @@ namespace cinder
         template <typename... Indices>
             requires(sizeof...(Indices) > 0U) &&
                     (std::integral<std::remove_cvref_t<Indices>> && ...)
-        [[nodiscard]] auto at(Indices... indices) const -> const_reference
+        [[nodiscard]] CINDER_HOST_DEVICE auto at(Indices... indices) const -> const_reference
         {
             const std::array<index_type, sizeof...(Indices)> multi_index{
                 static_cast<index_type>(indices)...};
@@ -522,13 +525,17 @@ namespace cinder
          *
          * @param value 填充值（fill value）。The fill value.
          */
-        void fill(const value_type &value)
+        CINDER_HOST_DEVICE void fill(const value_type &value)
         {
-            if (empty())
+            value_type *const raw_storage = data();
+            if (raw_storage == nullptr)
             {
                 return;
             }
-            std::fill_n(data(), size_, value);
+            for (size_type index{0U}; index < size_; ++index)
+            {
+                raw_storage[index] = value;
+            }
         }
 
     private:
@@ -540,17 +547,18 @@ namespace cinder
          * @param source 源数据指针（source data pointer）。The source data pointer.
          * @param allocator 分配器对象（allocator object）。The allocator object.
          */
-        Tensor(layout_type layout,
-               size_type element_count,
-               const value_type *source,
-               const allocator_type &allocator)
-            : layout_{std::move(layout)},
+        CINDER_HOST_DEVICE Tensor(layout_type layout,
+                                  size_type element_count,
+                                  const value_type *source,
+                                  const allocator_type &allocator)
+            : layout_{static_cast<layout_type &&>(layout)},
               allocator_{allocator}
         {
             const size_type expected_count = checked_storage_size(layout_, allocator_);
             if (element_count != expected_count)
             {
-                throw std::length_error{"cinder::Tensor source count does not match layout storage size"};
+                CINDER_ASSERT(false);
+                return;
             }
             initialize_copy(element_count, source);
         }
@@ -609,18 +617,21 @@ namespace cinder
          * @param allocator 分配器对象（allocator object）。The allocator object.
          * @return 可用于分配器的元素数量（allocator-compatible element count）。The allocator-compatible element count.
          */
-        [[nodiscard]] static auto checked_storage_size(const layout_type &layout,
-                                                       const allocator_type &allocator) -> size_type
+        [[nodiscard]] CINDER_HOST_DEVICE static constexpr auto checked_storage_size(
+            const layout_type &layout,
+            const allocator_type &allocator) noexcept -> size_type
         {
             const auto layout_count = detail::layout_storage_size(layout);
             const auto element_count = static_cast<size_type>(layout_count);
             if (static_cast<offset_type>(element_count) != layout_count)
             {
-                throw std::length_error{"cinder::Tensor layout storage size cannot fit allocator size_type"};
+                CINDER_ASSERT(false);
+                return size_type{0U};
             }
             if (element_count > allocator_traits::max_size(allocator))
             {
-                throw std::length_error{"cinder::Tensor layout storage size exceeds allocator max_size"};
+                CINDER_ASSERT(false);
+                return size_type{0U};
             }
             return element_count;
         }
@@ -631,13 +642,15 @@ namespace cinder
          * @param element_count 元素数量（element count）。The element count.
          * @return 分配器指针（allocator pointer）。The allocator pointer.
          */
-        [[nodiscard]] auto allocate_storage(size_type element_count) -> pointer
+        [[nodiscard]] CINDER_HOST_DEVICE auto allocate_storage(size_type element_count) -> pointer
         {
             if (element_count == size_type{0U})
             {
                 return pointer{};
             }
-            return allocator_traits::allocate(allocator_, element_count);
+            pointer storage = allocator_traits::allocate(allocator_, element_count);
+            CINDER_ASSERT(storage != pointer{});
+            return storage;
         }
 
         /**
@@ -646,7 +659,7 @@ namespace cinder
          * @param storage 存储指针（storage pointer）。The storage pointer.
          * @param constructed_count 已构造数量（constructed count）。The number of constructed elements.
          */
-        void destroy_constructed(pointer storage, size_type constructed_count) noexcept
+        CINDER_HOST_DEVICE void destroy_constructed(pointer storage, size_type constructed_count) noexcept
         {
             if (constructed_count == size_type{0U})
             {
@@ -666,7 +679,7 @@ namespace cinder
          * @param storage 存储指针（storage pointer）。The storage pointer.
          * @param element_count 元素数量（element count）。The element count.
          */
-        void deallocate_storage(pointer storage, size_type element_count) noexcept
+        CINDER_HOST_DEVICE void deallocate_storage(pointer storage, size_type element_count) noexcept
         {
             if (element_count != size_type{0U})
             {
@@ -677,7 +690,7 @@ namespace cinder
         /**
          * @brief 销毁并释放当前存储（release current storage）。Destroy and deallocate current storage.
          */
-        void release() noexcept
+        CINDER_HOST_DEVICE void release() noexcept
         {
             destroy_constructed(data_, size_);
             deallocate_storage(data_, size_);
@@ -690,23 +703,13 @@ namespace cinder
          *
          * @param element_count 元素数量（element count）。The element count.
          */
-        void initialize_default(size_type element_count)
+        CINDER_HOST_DEVICE void initialize_default(size_type element_count)
         {
             pointer storage = allocate_storage(element_count);
-            size_type constructed_count{0U};
-            try
+            value_type *const raw_storage = element_count == size_type{0U} ? nullptr : raw_pointer(storage);
+            for (size_type constructed_count{0U}; constructed_count < element_count; ++constructed_count)
             {
-                value_type *const raw_storage = element_count == size_type{0U} ? nullptr : raw_pointer(storage);
-                for (; constructed_count < element_count; ++constructed_count)
-                {
-                    allocator_traits::construct(allocator_, raw_storage + constructed_count);
-                }
-            }
-            catch (...)
-            {
-                destroy_constructed(storage, constructed_count);
-                deallocate_storage(storage, element_count);
-                throw;
+                allocator_traits::construct(allocator_, raw_storage + constructed_count);
             }
 
             data_ = storage;
@@ -719,23 +722,13 @@ namespace cinder
          * @param element_count 元素数量（element count）。The element count.
          * @param value 填充值（fill value）。The fill value.
          */
-        void initialize_fill(size_type element_count, const value_type &value)
+        CINDER_HOST_DEVICE void initialize_fill(size_type element_count, const value_type &value)
         {
             pointer storage = allocate_storage(element_count);
-            size_type constructed_count{0U};
-            try
+            value_type *const raw_storage = element_count == size_type{0U} ? nullptr : raw_pointer(storage);
+            for (size_type constructed_count{0U}; constructed_count < element_count; ++constructed_count)
             {
-                value_type *const raw_storage = element_count == size_type{0U} ? nullptr : raw_pointer(storage);
-                for (; constructed_count < element_count; ++constructed_count)
-                {
-                    allocator_traits::construct(allocator_, raw_storage + constructed_count, value);
-                }
-            }
-            catch (...)
-            {
-                destroy_constructed(storage, constructed_count);
-                deallocate_storage(storage, element_count);
-                throw;
+                allocator_traits::construct(allocator_, raw_storage + constructed_count, value);
             }
 
             data_ = storage;
@@ -748,69 +741,21 @@ namespace cinder
          * @param element_count 元素数量（element count）。The element count.
          * @param source 源数据指针（source data pointer）。The source data pointer.
          */
-        void initialize_copy(size_type element_count, const value_type *source)
+        CINDER_HOST_DEVICE void initialize_copy(size_type element_count, const value_type *source)
         {
+            if (element_count != size_type{0U} && source == nullptr)
+            {
+                CINDER_ASSERT(false);
+                return;
+            }
             pointer storage = allocate_storage(element_count);
-            size_type constructed_count{0U};
-            try
+            value_type *const raw_storage = element_count == size_type{0U} ? nullptr : raw_pointer(storage);
+            for (size_type constructed_count{0U}; constructed_count < element_count; ++constructed_count)
             {
-                value_type *const raw_storage = element_count == size_type{0U} ? nullptr : raw_pointer(storage);
-                for (; constructed_count < element_count; ++constructed_count)
-                {
-                    allocator_traits::construct(
-                        allocator_,
-                        raw_storage + constructed_count,
-                        source[constructed_count]);
-                }
-            }
-            catch (...)
-            {
-                destroy_constructed(storage, constructed_count);
-                deallocate_storage(storage, element_count);
-                throw;
-            }
-
-            data_ = storage;
-            size_ = element_count;
-        }
-
-        /**
-         * @brief 从范围初始化线性存储（range-initialize storage）。Initialize linear storage from a range.
-         *
-         * @tparam Range 输入范围类型（input range type）。The input range type.
-         * @param element_count 元素数量（element count）。The element count.
-         * @param values 初始值范围（initial value range）。The initial value range.
-         */
-        template <std::ranges::input_range Range>
-        void initialize_range(size_type element_count, Range &&values)
-        {
-            pointer storage = allocate_storage(element_count);
-            size_type constructed_count{0U};
-            auto iterator = std::ranges::begin(values);
-            auto sentinel = std::ranges::end(values);
-
-            try
-            {
-                value_type *const raw_storage = element_count == size_type{0U} ? nullptr : raw_pointer(storage);
-                for (; constructed_count < element_count && iterator != sentinel;
-                     ++constructed_count, ++iterator)
-                {
-                    allocator_traits::construct(
-                        allocator_,
-                        raw_storage + constructed_count,
-                        static_cast<value_type>(*iterator));
-                }
-
-                if (constructed_count != element_count || iterator != sentinel)
-                {
-                    throw std::length_error{"cinder::Tensor range count does not match layout storage size"};
-                }
-            }
-            catch (...)
-            {
-                destroy_constructed(storage, constructed_count);
-                deallocate_storage(storage, element_count);
-                throw;
+                allocator_traits::construct(
+                    allocator_,
+                    raw_storage + constructed_count,
+                    source[constructed_count]);
             }
 
             data_ = storage;
@@ -822,11 +767,13 @@ namespace cinder
          *
          * @param other 源张量（source tensor）。The source tensor.
          */
-        void adopt_storage_from(Tensor &other) noexcept(std::is_nothrow_move_assignable_v<layout_type>)
+        CINDER_HOST_DEVICE void adopt_storage_from(Tensor &other) noexcept(std::is_nothrow_move_assignable_v<layout_type>)
         {
-            layout_ = std::move(other.layout_);
-            data_ = std::exchange(other.data_, pointer{});
-            size_ = std::exchange(other.size_, size_type{0U});
+            layout_ = static_cast<layout_type &&>(other.layout_);
+            data_ = other.data_;
+            size_ = other.size_;
+            other.data_ = pointer{};
+            other.size_ = size_type{0U};
         }
 
         /**
@@ -835,11 +782,11 @@ namespace cinder
          * @param target 目标张量（target tensor）。The target tensor.
          * @param source 源张量（source tensor）。The source tensor.
          */
-        static void move_assign_values_to(Tensor &target, Tensor &source)
+        CINDER_HOST_DEVICE static void move_assign_values_to(Tensor &target, Tensor &source)
         {
             for (size_type index{0U}; index < target.size_; ++index)
             {
-                target.raw_data_unchecked()[index] = std::move(source.raw_data_unchecked()[index]);
+                target.raw_data_unchecked()[index] = static_cast<value_type &&>(source.raw_data_unchecked()[index]);
             }
         }
 
@@ -848,19 +795,14 @@ namespace cinder
          *
          * @param index 多重索引视图（multi-index view）。The multi-index view.
          */
-        void check_index(IndexView<index_type> index) const
+        CINDER_HOST_DEVICE void check_index(IndexView<index_type> index) const noexcept
         {
-            if (!detail::index_in_shape(layout_, index))
-            {
-                throw std::out_of_range{"cinder::Tensor index is outside shape"};
-            }
+            CINDER_ASSERT(detail::index_in_shape(layout_, index));
 
             const offset_type linear_offset = layout_.offset(index);
             const auto element_offset = static_cast<size_type>(linear_offset);
-            if (static_cast<offset_type>(element_offset) != linear_offset || element_offset >= size_)
-            {
-                throw std::out_of_range{"cinder::Tensor layout offset is outside storage"};
-            }
+            CINDER_ASSERT(static_cast<offset_type>(element_offset) == linear_offset);
+            CINDER_ASSERT(element_offset < size_);
         }
 
         /**

@@ -274,6 +274,7 @@ namespace
     static_assert(cinder::ArithmeticLike<Scalar>);
     static_assert(cinder::LayoutLike<cinder::RowMajorLayout<2>>);
     static_assert(cinder::LayoutLike<Dense2DLayout>);
+    static_assert(cinder::AllocatorLike<cinder::DefaultAllocator<int>>);
     static_assert(cinder::AllocatorLike<CountingAllocator<int>>);
     static_assert(cinder::TensorLike<cinder::Tensor<int, cinder::RowMajorLayout<2>>>);
 

@@ -313,6 +313,9 @@ namespace
     static_assert(cinder::LayoutLike<cinder::RowMajorLayout<2>>);
     static_assert(cinder::LayoutLike<Dense2DLayout>);
     static_assert(cinder::AllocatorLike<cinder::DefaultAllocator<int>>);
+    static_assert(cinder::AllocatorLike<cinder::CudaHostAllocator<int>>);
+    static_assert(cinder::AllocatorLike<cinder::CudaDeviceAllocator<int>>);
+    static_assert(cinder::AllocatorLike<cinder::CudaManagedAllocator<int>>);
     static_assert(cinder::AllocatorLike<CountingAllocator<int>>);
     static_assert(cinder::AllocatorLike<FixedIntAllocator>);
     static_assert(cinder::TensorLike<cinder::Tensor<int, cinder::RowMajorLayout<2>>>);

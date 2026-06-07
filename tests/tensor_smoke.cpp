@@ -310,7 +310,14 @@ namespace
     static_assert(cinder::ArithmeticLike<int>);
     static_assert(cinder::ArithmeticLike<double>);
     static_assert(cinder::ArithmeticLike<Scalar>);
+    static_assert(cinder::LayoutLike<cinder::RowMajorLayout<>>);
     static_assert(cinder::LayoutLike<cinder::RowMajorLayout<2>>);
+    static_assert(cinder::LayoutLike<cinder::ColumnMajorLayout<>>);
+    static_assert(cinder::LayoutLike<cinder::StridedLayout<>>);
+    static_assert(cinder::LayoutLike<cinder::PaddedLayout<>>);
+    static_assert(cinder::LayoutLike<cinder::BlockedLayout<>>);
+    static_assert(cinder::LayoutLike<cinder::TiledLayout<>>);
+    static_assert(cinder::LayoutLike<cinder::BroadcastLayout<>>);
     static_assert(cinder::LayoutLike<Dense2DLayout>);
     static_assert(cinder::AllocatorLike<cinder::DefaultAllocator<int>>);
     static_assert(cinder::AllocatorLike<cinder::CudaHostAllocator<int>>);
@@ -318,14 +325,14 @@ namespace
     static_assert(cinder::AllocatorLike<cinder::CudaManagedAllocator<int>>);
     static_assert(cinder::AllocatorLike<CountingAllocator<int>>);
     static_assert(cinder::AllocatorLike<FixedIntAllocator>);
-    static_assert(cinder::TensorLike<cinder::Tensor<int, cinder::RowMajorLayout<2>>>);
+    static_assert(cinder::TensorLike<cinder::Tensor<int, cinder::RowMajorLayout<>>>);
 
     /**
      * @brief 测试二维整数张量（test two-dimensional integer tensor）。Test a two-dimensional integer tensor.
      */
     void test_integer_tensor()
     {
-        using Layout = cinder::RowMajorLayout<2>;
+        using Layout = cinder::RowMajorLayout<>;
         cinder::Tensor<int, Layout> tensor{Layout{2U, 3U}, {0, 1, 2, 3, 4, 5}};
 
         assert(tensor.size() == 6U);
@@ -339,6 +346,12 @@ namespace
         const int values[]{10, 11, 12, 13, 14, 15};
         cinder::Tensor<int, Layout> from_pointer{Layout{2U, 3U}, values, 6U};
         assert(from_pointer(1, 2) == 15);
+
+        cinder::Tensor<int, Layout> rank_three{Layout{2U, 3U, 4U}, 0};
+        assert(rank_three.size() == 24U);
+        assert(rank_three.rank() == 3U);
+        rank_three(1, 2, 3) = 23;
+        assert(rank_three.at(1, 2, 3) == 23);
     }
 
     /**
@@ -346,7 +359,7 @@ namespace
      */
     void test_custom_arithmetic_value()
     {
-        using Layout = cinder::RowMajorLayout<1>;
+        using Layout = cinder::RowMajorLayout<>;
         cinder::Tensor<Scalar, Layout> tensor{Layout{3U}, Scalar{7}};
 
         tensor(1) = Scalar{11};
@@ -368,11 +381,121 @@ namespace
     }
 
     /**
+     * @brief 测试列主序布局（test column-major layout）。Test the column-major layout.
+     */
+    void test_column_major_layout()
+    {
+        using Layout = cinder::ColumnMajorLayout<>;
+        cinder::Tensor<int, Layout> tensor{Layout{2U, 3U}, {0, 1, 2, 3, 4, 5}};
+
+        assert(tensor.size() == 6U);
+        assert(tensor(0, 0) == 0);
+        assert(tensor(1, 0) == 1);
+        assert(tensor(0, 1) == 2);
+        assert(tensor(1, 2) == 5);
+    }
+
+    /**
+     * @brief 测试显式步幅布局（test explicit-stride layout）。Test the explicit-stride layout.
+     */
+    void test_strided_layout()
+    {
+        using Layout = cinder::StridedLayout<>;
+        using Shape = typename Layout::shape_type;
+        using Strides = typename Layout::stride_type;
+
+        cinder::Tensor<int, Layout> tensor{
+            Layout{Shape{2U, 3U}, Strides{4U, 1U}},
+            {0, 1, 2, 3, 4, 5, 6}};
+
+        assert(tensor.size() == 7U);
+        assert(tensor(0, 2) == 2);
+        assert(tensor(1, 0) == 4);
+        assert(tensor(1, 2) == 6);
+    }
+
+    /**
+     * @brief 测试填充布局（test padded layout）。Test the padded layout.
+     */
+    void test_padded_layout()
+    {
+        using Layout = cinder::PaddedLayout<>;
+        using Shape = typename Layout::shape_type;
+
+        cinder::Tensor<int, Layout> tensor{
+            Layout{Shape{2U, 3U}, Shape{2U, 4U}},
+            {0, 1, 2, 3, 4, 5, 6, 7}};
+
+        assert(tensor.size() == 8U);
+        assert(tensor(0, 2) == 2);
+        assert(tensor(1, 0) == 4);
+        assert(tensor(1, 2) == 6);
+    }
+
+    /**
+     * @brief 测试分块布局（test blocked layout）。Test the blocked layout.
+     */
+    void test_blocked_layout()
+    {
+        using Layout = cinder::BlockedLayout<>;
+        using Shape = typename Layout::shape_type;
+
+        cinder::Tensor<int, Layout> tensor{
+            Layout{Shape{3U, 5U}, Shape{2U, 2U}},
+            {0, 1, 2, 3, 4, 5, 6, 7,
+             8, 9, 10, 11, 12, 13, 14, 15,
+             16, 17, 18, 19, 20, 21, 22, 23}};
+
+        assert(tensor.size() == 24U);
+        assert(tensor(0, 0) == 0);
+        assert(tensor(1, 0) == 2);
+        assert(tensor(0, 2) == 4);
+        assert(tensor(2, 4) == 20);
+    }
+
+    /**
+     * @brief 测试平铺布局别名（test tiled layout alias）。Test the tiled layout alias.
+     */
+    void test_tiled_layout_alias()
+    {
+        using Layout = cinder::TiledLayout<>;
+        using Shape = typename Layout::shape_type;
+
+        cinder::Tensor<int, Layout> tensor{
+            Layout{Shape{2U, 2U}, Shape{1U, 2U}},
+            {0, 1, 2, 3}};
+
+        assert(tensor.size() == 4U);
+        assert(tensor(1, 1) == 3);
+    }
+
+    /**
+     * @brief 测试广播布局（test broadcast layout）。Test the broadcast layout.
+     */
+    void test_broadcast_layout()
+    {
+        using Layout = cinder::BroadcastLayout<>;
+        using Shape = typename Layout::shape_type;
+
+        cinder::Tensor<int, Layout> tensor{
+            Layout{Shape{2U, 3U}, Shape{1U, 3U}},
+            {10, 20, 30}};
+
+        assert(tensor.size() == 3U);
+        assert(tensor.rank() == 2U);
+        assert(tensor(0, 2) == 30);
+        assert(tensor(1, 2) == 30);
+
+        tensor(1, 1) = 99;
+        assert(tensor(0, 1) == 99);
+    }
+
+    /**
      * @brief 测试 allocator traits 路径（test allocator-traits path）。Test allocator-traits allocation path.
      */
     void test_allocator_traits_path()
     {
-        using Layout = cinder::RowMajorLayout<2>;
+        using Layout = cinder::RowMajorLayout<>;
         using Allocator = CountingAllocator<int>;
 
         const auto stats = std::make_shared<AllocationStats>();
@@ -405,6 +528,12 @@ auto main() -> int
     test_integer_tensor();
     test_custom_arithmetic_value();
     test_minimal_layout_without_storage_size();
+    test_column_major_layout();
+    test_strided_layout();
+    test_padded_layout();
+    test_blocked_layout();
+    test_tiled_layout_alias();
+    test_broadcast_layout();
     test_allocator_traits_path();
     return 0;
 }

@@ -25,6 +25,13 @@ namespace cinder
      *       `cinder::AllocatorTraits` 申请、构造、销毁和释放线性内存。`Layout` maps multi-indices to
      *       linear offsets; `Allocator` is mediated by `cinder::AllocatorTraits` for allocation,
      *       construction, destruction, and deallocation.
+     * @note 张量存储驻留位置（storage residence）完全由 `Allocator` 模板参数决定；`Tensor` 作为容器不隐式
+     *       执行 host/device 传输，也不把跨驻留位置拷贝伪装成普通线性读写。调用方必须选择与当前执行路径
+     *       匹配的 allocator 或显式 transfer/copy API。Tensor storage residence is determined solely by
+     *       the `Allocator` template parameter; as a container, `Tensor` does not implicitly perform
+     *       host/device transfers or disguise cross-residence copies as ordinary linear reads and writes.
+     *       Callers must choose an allocator matching the current execution path or use explicit
+     *       transfer/copy APIs.
      */
     template <typename Value,
               typename Layout,

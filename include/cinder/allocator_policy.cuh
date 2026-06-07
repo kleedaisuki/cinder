@@ -381,6 +381,10 @@ namespace cinder
      * @note `CudaMemorySpace::managed` 使用 `cudaMallocManaged`/`cudaFree`，遵循 CUDA Unified Memory
      *       编程模型。`CudaMemorySpace::managed` uses `cudaMallocManaged`/`cudaFree` and follows the CUDA
      *       Unified Memory programming model.
+     * @note 该 allocator 只描述存储驻留位置（storage residence）和分配/释放方式，不描述算术执行位置，也不
+     *       隐式执行 host/device 数据迁移。This allocator only describes storage residence and
+     *       allocation/deallocation; it does not describe where arithmetic executes and does not implicitly
+     *       migrate data between host and device.
      */
     template <typename Value, CudaMemorySpace MemorySpace>
     class CudaAllocator : public detail::CudaAllocatorTypes<Value>
@@ -475,6 +479,9 @@ namespace cinder
      * @note 该 allocator 返回 host 可直接解引用的 pinned memory（page-locked memory），适合作为 host/device
      *       传输 staging buffer。This allocator returns host-dereferenceable pinned memory, useful as a
      *       staging buffer for host/device transfers.
+     * @note 使用该 allocator 的 `Tensor` 是 host-resident 容器；它不会自动代表 device-resident 张量。
+     *       A `Tensor` using this allocator is a host-resident container; it does not automatically represent
+     *       a device-resident tensor.
      */
     template <typename Value>
     using CudaHostAllocator = CudaAllocator<Value, CudaMemorySpace::host>;
@@ -487,6 +494,10 @@ namespace cinder
      * @note 返回的 device pointer 通常不能由 host 直接解引用；需要由 kernel 或显式拷贝路径进行值构造与访问。
      *       The returned device pointer is generally not host-dereferenceable; value construction and access
      *       should happen through kernels or explicit copy paths.
+     * @note 使用该 allocator 的 `Tensor` 是 device-resident 容器；host 侧对象可以持有其元数据和 device
+     *       pointer，但跨 host/device 的值传输必须是显式操作。A `Tensor` using this allocator is a
+     *       device-resident container; a host-side object may hold its metadata and device pointer, but value
+     *       transfer across host/device must be explicit.
      */
     template <typename Value>
     using CudaDeviceAllocator = CudaAllocator<Value, CudaMemorySpace::device>;
@@ -500,6 +511,10 @@ namespace cinder
      *       必须遵守 CUDA Unified Memory 编程模型。Unified Memory, also called managed memory, can be
      *       accessed by CPU and GPU on supported systems, but access ordering must still follow the CUDA
      *       Unified Memory programming model.
+     * @note managed memory 改变可访问性（accessibility），不改变 `Tensor` 作为容器的职责边界；同步、预取和
+     *       跨执行域使用仍应由调用方或显式 runtime 路径表达。Managed memory changes accessibility, not
+     *       `Tensor`'s responsibility boundary as a container; synchronization, prefetching, and
+     *       cross-execution-domain use should still be expressed by the caller or an explicit runtime path.
      */
     template <typename Value>
     using CudaManagedAllocator = CudaAllocator<Value, CudaMemorySpace::managed>;

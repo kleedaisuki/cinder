@@ -495,7 +495,7 @@ namespace cinder
         template <typename... Extents>
             requires(sizeof...(Extents) > 0U) &&
                     (sizeof...(Extents) <= MaxRank) &&
-                     (std::convertible_to<Extents, index_type> && ...))
+                    (std::convertible_to<Extents, index_type> && ...)
         CINDER_HOST_DEVICE explicit constexpr RowMajorLayout(Extents... extents) noexcept
             : RowMajorLayout{shape_type{static_cast<index_type>(extents)...}}
         {

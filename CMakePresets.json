@@ -1,0 +1,53 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "vscode",
+      "displayName": "VSCode",
+      "description": "Configure Cinder for VSCode IntelliSense and local development.",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/vscode",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "Python_EXECUTABLE": "${sourceDir}/.venv/bin/python"
+      }
+    },
+    {
+      "name": "vscode-werror",
+      "displayName": "VSCode Werror",
+      "description": "Configure Cinder for VSCode with warnings treated as errors.",
+      "inherits": "vscode",
+      "binaryDir": "${sourceDir}/build/vscode-werror",
+      "cacheVariables": {
+        "CINDER_WARNINGS_AS_ERRORS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "vscode",
+      "configurePreset": "vscode"
+    },
+    {
+      "name": "vscode-werror",
+      "configurePreset": "vscode-werror"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "vscode",
+      "configurePreset": "vscode",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "vscode-werror",
+      "configurePreset": "vscode-werror",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

@@ -4,3 +4,34 @@
 *.ptx
 *.cubin
 *.fatbin
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+
+# CMake / native builds
+CMakeCache.txt
+CMakeFiles/
+cmake-build-*/
+_skbuild/
+*.so
+*.dylib
+*.dll
+*.a
+*.o
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/

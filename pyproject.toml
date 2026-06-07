@@ -1,0 +1,35 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.12"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "cinder"
+version = "0.1.0"
+description = "Python bindings for C++ functions."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [
+  { name = "cinder contributors" }
+]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: C++",
+  "Programming Language :: Python :: Implementation :: CPython",
+]
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+dev = ["build>=1.2", "pybind11>=2.12", "pytest>=8", "scikit-build-core>=0.10"]
+
+[tool.scikit-build]
+wheel.packages = ["src/cinder"]
+cmake.version = ">=3.20"
+build-dir = "build/{wheel_tag}"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cinder/allocator_policy.cuh"
+#include "cinder/allocator_traits.cuh"
 #include "cinder/concepts.cuh"
 #include "cinder/layout_policy.cuh"
 

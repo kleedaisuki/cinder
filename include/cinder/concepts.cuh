@@ -294,9 +294,10 @@ namespace cinder
      * @note 该概念通过 `std::allocator_traits` 建模标准库 allocator 契约，而不是硬编码成员函数形状。
      *       This concept models the standard-library allocator contract through `std::allocator_traits`
      *       instead of hard-coding member function shapes.
-     * @note `allocate`/`deallocate` 是最小内存契约；`rebind_alloc` 保证该类型能参与标准容器期望的
-     *       重绑定（rebinding）流程。对象构造性（object constructibility）属于被分配对象的契约，
-     *       不属于 allocator 本身的契约。
+     * @note `Tensor` 只需要当前 `value_type` 的 `allocate`/`deallocate` 最小内存契约，不要求
+     *       `rebind`/`rebind_alloc`。对象构造性（object constructibility）属于被分配对象的契约，
+     *       不属于 allocator 本身的契约。`Tensor` only needs the minimal memory contract for the current
+     *       `value_type`; it does not require `rebind`/`rebind_alloc`.
      */
     template <typename Allocator>
     concept AllocatorLike =
@@ -308,7 +309,6 @@ namespace cinder
             typename detail::allocator_traits_t<Allocator>::const_void_pointer;
             typename detail::allocator_traits_t<Allocator>::difference_type;
             typename detail::allocator_traits_t<Allocator>::size_type;
-            typename detail::allocator_traits_t<Allocator>::template rebind_alloc<std::byte>;
         } &&
         std::is_object_v<typename std::remove_cvref_t<Allocator>::value_type> &&
         (!std::is_const_v<typename std::remove_cvref_t<Allocator>::value_type>) &&

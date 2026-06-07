@@ -269,6 +269,44 @@ namespace
         std::shared_ptr<AllocationStats> stats_;
     };
 
+    /**
+     * @brief 固定 int 分配器（fixed int allocator）。Allocator fixed to int without rebind support.
+     *
+     * @note 该类型故意不是类模板，也不提供 `rebind`，用于验证 Tensor 不要求 allocator 自备
+     *       rebinding。This type is intentionally not a class template and provides no `rebind`, verifying
+     *       that Tensor does not require allocator rebinding.
+     */
+    class FixedIntAllocator
+    {
+    public:
+        /**
+         * @brief 分配器值类型（allocator value type）。The allocator value type.
+         */
+        using value_type = int;
+
+        /**
+         * @brief 分配对象数组（allocate objects）。Allocate an object array.
+         *
+         * @param count 对象数量（object count）。The object count.
+         * @return 分配得到的指针（allocated pointer）。The allocated pointer.
+         */
+        [[nodiscard]] auto allocate(std::size_t count) -> int *
+        {
+            return std::allocator<int>{}.allocate(count);
+        }
+
+        /**
+         * @brief 释放对象数组（deallocate objects）。Deallocate an object array.
+         *
+         * @param pointer 对象数组指针（object array pointer）。The object array pointer.
+         * @param count 对象数量（object count）。The object count.
+         */
+        void deallocate(int *pointer, std::size_t count) noexcept
+        {
+            std::allocator<int>{}.deallocate(pointer, count);
+        }
+    };
+
     static_assert(cinder::ArithmeticLike<int>);
     static_assert(cinder::ArithmeticLike<double>);
     static_assert(cinder::ArithmeticLike<Scalar>);
@@ -276,6 +314,7 @@ namespace
     static_assert(cinder::LayoutLike<Dense2DLayout>);
     static_assert(cinder::AllocatorLike<cinder::DefaultAllocator<int>>);
     static_assert(cinder::AllocatorLike<CountingAllocator<int>>);
+    static_assert(cinder::AllocatorLike<FixedIntAllocator>);
     static_assert(cinder::TensorLike<cinder::Tensor<int, cinder::RowMajorLayout<2>>>);
 
     /**
@@ -344,6 +383,12 @@ namespace
 
         assert(stats->deallocations == 1U);
         assert(stats->deallocated_elements == 4U);
+
+        cinder::Tensor<int, Layout, FixedIntAllocator> fixed_allocator_tensor{
+            Layout{1U, 2U},
+            {8, 9},
+            FixedIntAllocator{}};
+        assert(fixed_allocator_tensor(0, 1) == 9);
     }
 } // namespace
 

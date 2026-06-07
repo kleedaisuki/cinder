@@ -179,16 +179,40 @@ namespace cinder
     } // namespace detail
 
     /**
-     * @brief 张量式类型（Tensor-like type）：表示有限自然数多重索引到实数的映射。Tensor-like type: a map from finite natural-number multi-indices to real values.
+     * @brief 可算术运算值类型（arithmetic-like value type）。Arithmetic-like value type.
+     *
+     * @tparam Value 值类型候选（value type candidate）。The candidate value type.
+     *
+     * @note 该概念覆盖内建算术类型（built-in arithmetic types）以及用户自定义的数值类型
+     *       （user-defined numeric types）。Tensor 存储需要值类型可默认构造、复制和析构；数值语义需要
+     *       `+`、`-`、`*`、`/` 的结果可转换回该值类型。This concept covers both built-in arithmetic
+     *       types and user-defined numeric types. Tensor storage needs default construction, copying,
+     *       and destruction; numeric semantics require `+`, `-`, `*`, and `/` to produce values
+     *       convertible back to the value type.
+     */
+    template <typename Value>
+    concept ArithmeticLike =
+        std::semiregular<std::remove_cvref_t<Value>> &&
+        (!std::is_const_v<std::remove_cvref_t<Value>>) &&
+        requires(const std::remove_cvref_t<Value> &lhs,
+                 const std::remove_cvref_t<Value> &rhs) {
+            { lhs + rhs } -> std::convertible_to<std::remove_cvref_t<Value>>;
+            { lhs - rhs } -> std::convertible_to<std::remove_cvref_t<Value>>;
+            { lhs * rhs } -> std::convertible_to<std::remove_cvref_t<Value>>;
+            { lhs / rhs } -> std::convertible_to<std::remove_cvref_t<Value>>;
+        };
+
+    /**
+     * @brief 张量式类型（Tensor-like type）：表示有限自然数多重索引到可算术值的映射。Tensor-like type: a map from finite natural-number multi-indices to arithmetic-like values.
      *
      * @tparam Tensor 张量候选类型（tensor candidate type）。The tensor candidate type.
      *
-     * @note 数学契约是 `shape()[0] x ... x shape()[n - 1] -> R`：`shape()` 给出每一维的有限定义域
+     * @note 数学契约是 `shape()[0] x ... x shape()[n - 1] -> V`：`shape()` 给出每一维的有限定义域
      *       （finite domain），其长度就是阶数/维数（rank/dimension）`n`；`operator()(IndexView<index_type>)`
-     *       在长度为 `n` 的多重索引（multi-index）上求值并返回实数（real number）。The mathematical contract is
-     *       `shape()[0] x ... x shape()[n - 1] -> R`: `shape()` gives each finite domain extent, its length is
-     *       the rank/dimension `n`, and `operator()(IndexView<index_type>)` evaluates the tensor at a
-     *       multi-index of length `n` and returns a real number.
+     *       在长度为 `n` 的多重索引（multi-index）上求值并返回可算术值（arithmetic-like value）。The
+     *       mathematical contract is `shape()[0] x ... x shape()[n - 1] -> V`: `shape()` gives each finite
+     *       domain extent, its length is the rank/dimension `n`, and `operator()(IndexView<index_type>)`
+     *       evaluates the tensor at a multi-index of length `n` and returns an arithmetic-like value.
      * @note 该概念故意不要求存储布局、连续内存或可变性。Those are implementation details, not part of the
      *       first-principles definition of a tensor as a function.
      * @note 对于运行时阶数（runtime rank），C++ concept 无法静态表达“调用时必须刚好传入 `n` 个独立参数”。
@@ -201,7 +225,7 @@ namespace cinder
             typename detail::tensor_value_t<Tensor>;
             typename detail::tensor_index_t<Tensor>;
         } &&
-        std::floating_point<detail::tensor_value_t<Tensor>> &&
+        ArithmeticLike<detail::tensor_value_t<Tensor>> &&
         std::unsigned_integral<detail::tensor_index_t<Tensor>> &&
         requires(const std::remove_cvref_t<Tensor> &tensor) {
             { tensor.shape() } -> std::ranges::sized_range;

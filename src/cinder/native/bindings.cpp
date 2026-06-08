@@ -147,6 +147,17 @@ namespace
             Return the tensor product of this Tensor and another Tensor.
             )pbdoc")
         .def(
+            "contract",
+            &cinder::Tensor::contract,
+            py::arg("other"),
+            py::arg("axes"),
+            py::arg("other_axes"),
+            R"pbdoc(
+            沿指定轴对返回当前 Tensor 与另一个 Tensor 的缩并。
+
+            Return the contraction of this Tensor and another Tensor along axis pairs.
+            )pbdoc")
+        .def(
             "__add__",
             [](const cinder::Tensor &lhs, const cinder::Tensor &rhs) {
               return lhs + rhs;

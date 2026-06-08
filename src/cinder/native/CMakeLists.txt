@@ -62,7 +62,7 @@ set(cinder_native_sources
 
 if(CINDER_ENABLE_CUDA)
   find_package(CUDAToolkit REQUIRED)
-  list(APPEND cinder_native_sources tensor.cu tensor_product.cu)
+  list(APPEND cinder_native_sources tensor.cu tensor_product.cu tensor_contraction.cu)
 endif()
 
 pybind11_add_module(core

@@ -24,12 +24,76 @@ def assert_tensor(tensor: object, shape: list[int], values: list[float]) -> None
     assert tensor.to_list() == pytest.approx(values)
 
 
+def row_major_offset(shape: list[int], indices: list[int]) -> int:
+    offset = 0
+
+    for extent, index in zip(shape, indices):
+        offset = (offset * extent) + index
+
+    return offset
+
+
+def unravel_row_major(shape: list[int], linear_index: int) -> list[int]:
+    coordinates: list[int] = []
+
+    for extent in reversed(shape):
+        coordinates.append(linear_index % extent)
+        linear_index //= extent
+
+    coordinates.reverse()
+    return coordinates
+
+
+def contract_reference(
+    lhs_shape: list[int],
+    lhs_values: list[float],
+    rhs_shape: list[int],
+    rhs_values: list[float],
+    lhs_axes: list[int],
+    rhs_axes: list[int],
+) -> tuple[list[int], list[float]]:
+    lhs_free_axes = [axis for axis in range(len(lhs_shape)) if axis not in lhs_axes]
+    rhs_free_axes = [axis for axis in range(len(rhs_shape)) if axis not in rhs_axes]
+    output_shape = [lhs_shape[axis] for axis in lhs_free_axes] + [rhs_shape[axis] for axis in rhs_free_axes]
+    contraction_shape = [lhs_shape[axis] for axis in lhs_axes]
+    output_values: list[float] = []
+
+    for output_linear in range(math.prod(output_shape)):
+        output_coordinates = unravel_row_major(output_shape, output_linear)
+        lhs_indices = [0] * len(lhs_shape)
+        rhs_indices = [0] * len(rhs_shape)
+
+        for coordinate, axis in zip(output_coordinates[: len(lhs_free_axes)], lhs_free_axes):
+            lhs_indices[axis] = coordinate
+
+        for coordinate, axis in zip(output_coordinates[len(lhs_free_axes) :], rhs_free_axes):
+            rhs_indices[axis] = coordinate
+
+        total = 0.0
+
+        for contraction_linear in range(math.prod(contraction_shape)):
+            contraction_coordinates = unravel_row_major(contraction_shape, contraction_linear)
+
+            for coordinate, lhs_axis, rhs_axis in zip(contraction_coordinates, lhs_axes, rhs_axes):
+                lhs_indices[lhs_axis] = coordinate
+                rhs_indices[rhs_axis] = coordinate
+
+            total += lhs_values[row_major_offset(lhs_shape, lhs_indices)] * rhs_values[
+                row_major_offset(rhs_shape, rhs_indices)
+            ]
+
+        output_values.append(total)
+
+    return output_shape, output_values
+
+
 def test_public_api_exposes_tensor_only() -> None:
     assert cinder.__all__ == ["Tensor"]
     assert cinder.Tensor is core.Tensor
     assert hasattr(Tensor, "tensor_product")
+    assert hasattr(Tensor, "contract")
 
-    for name in ("add", "subtract", "multiply", "divide", "tensor_product"):
+    for name in ("add", "subtract", "multiply", "divide", "tensor_product", "contract"):
         assert not hasattr(cinder, name)
         assert not hasattr(core, name)
 
@@ -141,6 +205,53 @@ def test_tensor_product_zero_extent_preserves_concatenated_shape() -> None:
     assert_tensor(lhs.tensor_product(rhs), [2, 0, 3], [])
 
 
+def test_tensor_contract_vector_dot_product() -> None:
+    lhs = Tensor([3], [1.0, 2.0, 3.0])
+    rhs = Tensor([3], [10.0, 20.0, 30.0])
+
+    assert_tensor(lhs.contract(rhs, [0], [0]), [], [140.0])
+
+
+def test_tensor_contract_matrix_multiplication() -> None:
+    lhs = Tensor([2, 3], [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+    rhs = Tensor([3, 2], [7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
+
+    assert_tensor(lhs.contract(rhs, [1], [0]), [2, 2], [58.0, 64.0, 139.0, 154.0])
+
+
+def test_tensor_contract_multiple_axes_preserves_free_axis_order() -> None:
+    lhs_shape = [2, 3, 2]
+    rhs_shape = [2, 3, 4]
+    lhs_values = [float(index + 1) for index in range(math.prod(lhs_shape))]
+    rhs_values = [float((index % 7) - 3) for index in range(math.prod(rhs_shape))]
+    output_shape, output_values = contract_reference(lhs_shape, lhs_values, rhs_shape, rhs_values, [2, 1], [0, 1])
+
+    result = Tensor(lhs_shape, lhs_values).contract(Tensor(rhs_shape, rhs_values), [2, 1], [0, 1])
+
+    assert_tensor(result, output_shape, output_values)
+
+
+def test_tensor_contract_without_axes_matches_tensor_product_shape_and_values() -> None:
+    lhs = Tensor([2], [2.0, -1.0])
+    rhs = Tensor([2, 2], [3.0, 4.0, 5.0, 6.0])
+
+    assert_tensor(lhs.contract(rhs, [], []), [2, 2, 2], [6.0, 8.0, 10.0, 12.0, -3.0, -4.0, -5.0, -6.0])
+
+
+def test_tensor_contract_zero_contracted_extent_returns_zero_sum() -> None:
+    lhs = Tensor([2, 0])
+    rhs = Tensor([0, 3])
+
+    assert_tensor(lhs.contract(rhs, [1], [0]), [2, 3], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+
+
+def test_tensor_contract_zero_free_extent_preserves_shape() -> None:
+    lhs = Tensor([2, 0, 3])
+    rhs = Tensor([3])
+
+    assert_tensor(lhs.contract(rhs, [2], [0]), [2, 0], [])
+
+
 def test_tensor_division_follows_float32_cuda_semantics_for_zero_divisor() -> None:
     result = Tensor([3], [1.0, -1.0, 0.0]) / Tensor([3], [0.0, 0.0, 0.0])
     values = result.to_list()
@@ -187,6 +298,7 @@ def test_tensor_rejects_shape_mismatch(lhs_shape: list[int], rhs_shape: list[int
         lambda tensor: tensor - object(),
         lambda tensor: object() * tensor,
         lambda tensor: tensor.tensor_product(object()),
+        lambda tensor: tensor.contract(object(), [], []),
     ],
 )
 def test_tensor_rejects_non_tensor_operands(expression) -> None:
@@ -207,3 +319,20 @@ def test_tensor_rejects_non_tensor_operands(expression) -> None:
 def test_tensor_rejects_invalid_constructor_arguments(args: tuple[object, ...], error: type[Exception]) -> None:
     with pytest.raises(error):
         Tensor(*args)
+
+
+@pytest.mark.parametrize(
+    ("lhs_axes", "rhs_axes", "error"),
+    [
+        ([0], [], "same length"),
+        ([2], [0], "out of range"),
+        ([0, 0], [0, 1], "unique"),
+        ([0], [1], "extents must match"),
+    ],
+)
+def test_tensor_contract_rejects_invalid_axes(lhs_axes: list[int], rhs_axes: list[int], error: str) -> None:
+    lhs = Tensor([2, 3], [1.0] * 6)
+    rhs = Tensor([2, 4], [1.0] * 8)
+
+    with pytest.raises(ValueError, match=error):
+        lhs.contract(rhs, lhs_axes, rhs_axes)

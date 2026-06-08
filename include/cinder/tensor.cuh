@@ -397,6 +397,21 @@ namespace cinder
      */
     [[nodiscard]] auto tensor_product(const Tensor &rhs) const -> Tensor;
 
+    /**
+     * @brief 计算当前 Tensor 与另一个 Tensor 沿指定轴对的缩并。Compute the contraction of this Tensor and another Tensor along axis pairs.
+     *
+     * @param rhs 右侧 Tensor。Right-hand side Tensor.
+     * @param lhs_axes 当前 Tensor 中参与缩并的轴。Axes in this Tensor to contract.
+     * @param rhs_axes 右侧 Tensor 中参与缩并的轴。Axes in the right-hand side Tensor to contract.
+     * @return 缩并结果 Tensor。Tensor contraction result Tensor.
+     *
+     * @note 输出 shape 为 lhs 未缩并轴后接 rhs 未缩并轴；输出 data 由单个 CUDA kernel 写入。
+     *       The output shape is the uncontracted lhs axes followed by the uncontracted rhs axes; output data is written by one CUDA kernel.
+     */
+    [[nodiscard]] auto contract(const Tensor &rhs,
+                                const std::vector<size_type> &lhs_axes,
+                                const std::vector<size_type> &rhs_axes) const -> Tensor;
+
   private:
     /**
      * @brief 允许加法运算符访问私有二元运算入口。Allow the addition operator to access the private binary operation entry point.
@@ -422,6 +437,14 @@ namespace cinder
      * @brief 允许张量积函数构造未初始化输出 Tensor。Allow tensor_product to construct an uninitialized output Tensor.
      */
     friend auto tensor_product(const Tensor &lhs, const Tensor &rhs) -> Tensor;
+
+    /**
+     * @brief 允许缩并函数构造未初始化输出 Tensor。Allow contract to construct an uninitialized output Tensor.
+     */
+    friend auto contract(const Tensor &lhs,
+                         const Tensor &rhs,
+                         const std::vector<size_type> &lhs_axes,
+                         const std::vector<size_type> &rhs_axes) -> Tensor;
 
     /**
      * @brief 不初始化 device storage 的构造标签。Construction tag for uninitialized device storage.
@@ -573,5 +596,24 @@ namespace cinder
    *       and output.linear(i * rhs.size() + j) = lhs.linear(i) * rhs.linear(j).
    */
   [[nodiscard]] auto tensor_product(const Tensor &lhs, const Tensor &rhs) -> Tensor;
+
+  /**
+   * @brief 计算两个 Tensor 沿指定轴对的缩并。Compute the contraction of two Tensors along axis pairs.
+   *
+   * @param lhs 左侧 Tensor。Left-hand side Tensor.
+   * @param rhs 右侧 Tensor。Right-hand side Tensor.
+   * @param lhs_axes 左侧 Tensor 中参与缩并的轴。Axes in the left-hand side Tensor to contract.
+   * @param rhs_axes 右侧 Tensor 中参与缩并的轴。Axes in the right-hand side Tensor to contract.
+   * @return 缩并结果 Tensor。Tensor contraction result Tensor.
+   *
+   * @note 对 dense row-major storage，输出 shape 为 lhs 未缩并轴后接 rhs 未缩并轴；
+   *       每个输出元素是所有缩并坐标上的乘积求和。
+   *       For dense row-major storage, the output shape is the uncontracted lhs axes followed by the uncontracted rhs axes;
+   *       each output element is the sum of products over all contracted coordinates.
+   */
+  [[nodiscard]] auto contract(const Tensor &lhs,
+                              const Tensor &rhs,
+                              const std::vector<Tensor::size_type> &lhs_axes,
+                              const std::vector<Tensor::size_type> &rhs_axes) -> Tensor;
 
 } // namespace cinder

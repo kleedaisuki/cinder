@@ -56,9 +56,18 @@ endif()
 
 find_package(pybind11 CONFIG REQUIRED)
 
-pybind11_add_module(core
+set(cinder_native_sources
   bindings.cpp
   add.cpp
+)
+
+if(CINDER_ENABLE_CUDA)
+  find_package(CUDAToolkit REQUIRED)
+  list(APPEND cinder_native_sources tensor.cu)
+endif()
+
+pybind11_add_module(core
+  ${cinder_native_sources}
 )
 
 set_target_properties(core
@@ -72,6 +81,17 @@ target_include_directories(core
 )
 
 target_link_libraries(core PRIVATE cinder_options)
+
+if(CINDER_ENABLE_CUDA)
+  target_compile_definitions(core PRIVATE CINDER_HAS_CUDA=1)
+  target_link_libraries(core PRIVATE CUDA::cudart)
+  set_target_properties(core
+    PROPERTIES
+      CUDA_STANDARD 20
+      CUDA_STANDARD_REQUIRED ON
+      CUDA_EXTENSIONS OFF
+  )
+endif()
 
 file(COPY ${PROJECT_SOURCE_DIR}/src/cinder/__init__.py DESTINATION ${CMAKE_BINARY_DIR}/cinder)
 

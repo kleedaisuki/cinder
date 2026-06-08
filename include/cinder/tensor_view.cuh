@@ -62,7 +62,9 @@ namespace cinder
     /**
      * @brief 构造空视图。Construct an empty view.
      */
-    CINDER_HOST_DEVICE constexpr TensorView() noexcept = default;
+    CINDER_HOST_DEVICE constexpr TensorView() noexcept
+    {
+    }
 
     /**
      * @brief 从线性内存指针和 shape 构造视图。Construct a view from a linear memory pointer and shape.

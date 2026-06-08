@@ -32,7 +32,9 @@ namespace cinder
     /**
      * @brief 构造空形状。Construct an empty shape.
      */
-    CINDER_HOST_DEVICE constexpr Shape() noexcept = default;
+    CINDER_HOST_DEVICE constexpr Shape() noexcept
+    {
+    }
 
     /**
      * @brief 从 rank 和 extent 指针构造形状。Construct a shape from a rank and extent pointer.

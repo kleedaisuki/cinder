@@ -44,6 +44,22 @@ def unravel_row_major(shape: list[int], linear_index: int) -> list[int]:
     return coordinates
 
 
+def transpose_reference(shape: list[int], values: list[float], axes: list[int]) -> tuple[list[int], list[float]]:
+    output_shape = [shape[axis] for axis in axes]
+    output_values: list[float] = []
+
+    for output_linear in range(math.prod(output_shape)):
+        output_coordinates = unravel_row_major(output_shape, output_linear)
+        input_indices = [0] * len(shape)
+
+        for coordinate, input_axis in zip(output_coordinates, axes):
+            input_indices[input_axis] = coordinate
+
+        output_values.append(values[row_major_offset(shape, input_indices)])
+
+    return output_shape, output_values
+
+
 def contract_reference(
     lhs_shape: list[int],
     lhs_values: list[float],
@@ -91,9 +107,10 @@ def test_public_api_exposes_tensor_only() -> None:
     assert cinder.__all__ == ["Tensor"]
     assert cinder.Tensor is core.Tensor
     assert hasattr(Tensor, "tensor_product")
+    assert hasattr(Tensor, "transpose")
     assert hasattr(Tensor, "contract")
 
-    for name in ("add", "subtract", "multiply", "divide", "tensor_product", "contract"):
+    for name in ("add", "subtract", "multiply", "divide", "tensor_product", "transpose", "contract"):
         assert not hasattr(cinder, name)
         assert not hasattr(core, name)
 
@@ -174,6 +191,43 @@ def test_tensor_operations_do_not_mutate_inputs() -> None:
 
     assert_tensor(lhs, [3], [1.0, 2.0, 3.0])
     assert_tensor(rhs, [3], [10.0, 20.0, 30.0])
+
+
+def test_tensor_transpose_matrix_default_reverses_axes() -> None:
+    tensor = Tensor([2, 3], [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+
+    assert_tensor(tensor.transpose(), [3, 2], [1.0, 4.0, 2.0, 5.0, 3.0, 6.0])
+
+
+def test_tensor_transpose_higher_rank_axis_permutation() -> None:
+    shape = [2, 3, 4]
+    values = [float(index + 1) for index in range(math.prod(shape))]
+    axes = [1, 2, 0]
+    output_shape, output_values = transpose_reference(shape, values, axes)
+
+    assert_tensor(Tensor(shape, values).transpose(axes), output_shape, output_values)
+
+
+def test_tensor_transpose_scalar_and_vector_are_identity() -> None:
+    scalar = Tensor([], [9.0])
+    vector = Tensor([3], [1.0, -2.0, 4.0])
+
+    assert_tensor(scalar.transpose(), [], [9.0])
+    assert_tensor(scalar.transpose([]), [], [9.0])
+    assert_tensor(vector.transpose(), [3], [1.0, -2.0, 4.0])
+
+
+def test_tensor_transpose_zero_extent_preserves_permuted_shape() -> None:
+    tensor = Tensor([2, 0, 3])
+
+    assert_tensor(tensor.transpose([2, 1, 0]), [3, 0, 2], [])
+
+
+def test_tensor_transpose_chains_with_elementwise_operations() -> None:
+    lhs = Tensor([2, 2], [1.0, 2.0, 3.0, 4.0])
+    rhs = Tensor([2, 2], [10.0, 20.0, 30.0, 40.0])
+
+    assert_tensor(lhs.transpose() + rhs.transpose(), [2, 2], [11.0, 33.0, 22.0, 44.0])
 
 
 def test_tensor_product_vector_outer_product() -> None:
@@ -298,6 +352,7 @@ def test_tensor_rejects_shape_mismatch(lhs_shape: list[int], rhs_shape: list[int
         lambda tensor: tensor - object(),
         lambda tensor: object() * tensor,
         lambda tensor: tensor.tensor_product(object()),
+        lambda tensor: tensor.transpose(object()),
         lambda tensor: tensor.contract(object(), [], []),
     ],
 )
@@ -319,6 +374,21 @@ def test_tensor_rejects_non_tensor_operands(expression) -> None:
 def test_tensor_rejects_invalid_constructor_arguments(args: tuple[object, ...], error: type[Exception]) -> None:
     with pytest.raises(error):
         Tensor(*args)
+
+
+@pytest.mark.parametrize(
+    ("axes", "error"),
+    [
+        ([0], "match Tensor rank"),
+        ([0, 2], "out of range"),
+        ([0, 0], "unique"),
+    ],
+)
+def test_tensor_transpose_rejects_invalid_axes(axes: list[int], error: str) -> None:
+    tensor = Tensor([2, 3], [1.0] * 6)
+
+    with pytest.raises(ValueError, match=error):
+        tensor.transpose(axes)
 
 
 @pytest.mark.parametrize(

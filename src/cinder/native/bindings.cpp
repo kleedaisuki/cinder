@@ -147,6 +147,24 @@ namespace
             Return the tensor product of this Tensor and another Tensor.
             )pbdoc")
         .def(
+            "transpose",
+            static_cast<cinder::Tensor (cinder::Tensor::*)() const>(&cinder::Tensor::transpose),
+            R"pbdoc(
+            反转所有轴顺序并返回转置 Tensor。
+
+            Return a transposed Tensor with all axes reversed.
+            )pbdoc")
+        .def(
+            "transpose",
+            static_cast<cinder::Tensor (cinder::Tensor::*)(const std::vector<cinder::Tensor::size_type> &) const>(
+                &cinder::Tensor::transpose),
+            py::arg("axes"),
+            R"pbdoc(
+            按给定轴置换返回转置 Tensor。
+
+            Return a transposed Tensor using the given axis permutation.
+            )pbdoc")
+        .def(
             "contract",
             &cinder::Tensor::contract,
             py::arg("other"),

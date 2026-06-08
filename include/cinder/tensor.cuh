@@ -398,6 +398,27 @@ namespace cinder
     [[nodiscard]] auto tensor_product(const Tensor &rhs) const -> Tensor;
 
     /**
+     * @brief 反转所有轴顺序并返回转置 Tensor。Return a transposed Tensor with all axes reversed.
+     *
+     * @return 转置结果 Tensor。Transposed Tensor result.
+     *
+     * @note 对 rank-2 Tensor 该操作等价于矩阵转置；输出 data 由单个 CUDA kernel 写入。
+     *       For a rank-2 Tensor this is matrix transpose; output data is written by one CUDA kernel.
+     */
+    [[nodiscard]] auto transpose() const -> Tensor;
+
+    /**
+     * @brief 按给定轴置换返回转置 Tensor。Return a transposed Tensor using the given axis permutation.
+     *
+     * @param axes 输出轴到输入轴的置换。Permutation from output axes to input axes.
+     * @return 转置结果 Tensor。Transposed Tensor result.
+     *
+     * @note axes 必须包含每个输入轴且只包含一次；输出 data 由单个 CUDA kernel 写入。
+     *       axes must contain every input axis exactly once; output data is written by one CUDA kernel.
+     */
+    [[nodiscard]] auto transpose(const std::vector<size_type> &axes) const -> Tensor;
+
+    /**
      * @brief 计算当前 Tensor 与另一个 Tensor 沿指定轴对的缩并。Compute the contraction of this Tensor and another Tensor along axis pairs.
      *
      * @param rhs 右侧 Tensor。Right-hand side Tensor.
@@ -437,6 +458,16 @@ namespace cinder
      * @brief 允许张量积函数构造未初始化输出 Tensor。Allow tensor_product to construct an uninitialized output Tensor.
      */
     friend auto tensor_product(const Tensor &lhs, const Tensor &rhs) -> Tensor;
+
+    /**
+     * @brief 允许默认转置函数构造未初始化输出 Tensor。Allow the default transpose function to construct an uninitialized output Tensor.
+     */
+    friend auto transpose(const Tensor &input) -> Tensor;
+
+    /**
+     * @brief 允许轴置换转置函数构造未初始化输出 Tensor。Allow the axis-permutation transpose function to construct an uninitialized output Tensor.
+     */
+    friend auto transpose(const Tensor &input, const std::vector<size_type> &axes) -> Tensor;
 
     /**
      * @brief 允许缩并函数构造未初始化输出 Tensor。Allow contract to construct an uninitialized output Tensor.
@@ -596,6 +627,31 @@ namespace cinder
    *       and output.linear(i * rhs.size() + j) = lhs.linear(i) * rhs.linear(j).
    */
   [[nodiscard]] auto tensor_product(const Tensor &lhs, const Tensor &rhs) -> Tensor;
+
+  /**
+   * @brief 反转 Tensor 所有轴顺序。Reverse all Tensor axes.
+   *
+   * @param input 输入 Tensor。Input Tensor.
+   * @return 转置结果 Tensor。Transposed Tensor result.
+   *
+   * @note 对 dense row-major storage，输出 shape 为 input.shape() 的反序，
+   *       且输出 linear 数据按反序坐标从输入读取。
+   *       For dense row-major storage, the output shape is the reverse of input.shape(),
+   *       and output linear data is read from input using reversed coordinates.
+   */
+  [[nodiscard]] auto transpose(const Tensor &input) -> Tensor;
+
+  /**
+   * @brief 按给定轴置换转置 Tensor。Transpose a Tensor using the given axis permutation.
+   *
+   * @param input 输入 Tensor。Input Tensor.
+   * @param axes 输出轴到输入轴的置换。Permutation from output axes to input axes.
+   * @return 转置结果 Tensor。Transposed Tensor result.
+   *
+   * @note axes[i] 指定输出第 i 个轴来自输入哪个轴；axes 必须是 [0, rank) 的置换。
+   *       axes[i] selects which input axis becomes output axis i; axes must be a permutation of [0, rank).
+   */
+  [[nodiscard]] auto transpose(const Tensor &input, const std::vector<Tensor::size_type> &axes) -> Tensor;
 
   /**
    * @brief 计算两个 Tensor 沿指定轴对的缩并。Compute the contraction of two Tensors along axis pairs.

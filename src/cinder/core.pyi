@@ -10,7 +10,7 @@ class Tensor:
     Tensor owns a single packed CUDA allocation containing metadata and data.
     Python exposes only the high-level tensor object: construction, shape
     inspection, host readback, elementwise arithmetic operators, tensor product,
-    and contraction.
+    transpose, and contraction.
     """
 
     @overload
@@ -48,6 +48,16 @@ class Tensor:
 
     def tensor_product(self, other: Tensor) -> Tensor:
         """Return the tensor product of ``self`` and ``other``."""
+        ...
+
+    @overload
+    def transpose(self) -> Tensor:
+        """Return a transposed tensor with all axes reversed."""
+        ...
+
+    @overload
+    def transpose(self, axes: Sequence[int]) -> Tensor:
+        """Return a transposed tensor using the given axis permutation."""
         ...
 
     def contract(self, other: Tensor, axes: Sequence[int], other_axes: Sequence[int]) -> Tensor:

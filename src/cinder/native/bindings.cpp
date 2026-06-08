@@ -186,8 +186,46 @@ namespace
             Return the mode multiplication of this Tensor and a matrix.
             )pbdoc")
         .def(
+            "inner",
+            &cinder::Tensor::inner,
+            py::arg("other"),
+            R"pbdoc(
+            返回当前 Tensor 与另一个 Tensor 的内积，结果为 rank-0 Tensor。
+
+            Return the inner product of this Tensor and another Tensor as a rank-0 Tensor.
+            )pbdoc")
+        .def(
+            "dot",
+            &cinder::Tensor::dot,
+            py::arg("other"),
+            R"pbdoc(
+            返回当前 Tensor 与另一个 Tensor 的点积别名，结果为 rank-0 Tensor。
+
+            Return the dot-product alias of this Tensor and another Tensor as a rank-0 Tensor.
+            )pbdoc")
+        .def(
+            "norm",
+            &cinder::Tensor::norm,
+            R"pbdoc(
+            返回当前 Tensor 的 L2 范数，结果为 rank-0 Tensor。
+
+            Return the L2 norm of this Tensor as a rank-0 Tensor.
+            )pbdoc")
+        .def(
             "__add__",
             [](const cinder::Tensor &lhs, const cinder::Tensor &rhs) {
+              return lhs + rhs;
+            },
+            py::is_operator())
+        .def(
+            "__add__",
+            [](const cinder::Tensor &lhs, cinder::Tensor::value_type rhs) {
+              return lhs + rhs;
+            },
+            py::is_operator())
+        .def(
+            "__radd__",
+            [](const cinder::Tensor &rhs, cinder::Tensor::value_type lhs) {
               return lhs + rhs;
             },
             py::is_operator())
@@ -198,14 +236,50 @@ namespace
             },
             py::is_operator())
         .def(
+            "__sub__",
+            [](const cinder::Tensor &lhs, cinder::Tensor::value_type rhs) {
+              return lhs - rhs;
+            },
+            py::is_operator())
+        .def(
+            "__rsub__",
+            [](const cinder::Tensor &rhs, cinder::Tensor::value_type lhs) {
+              return lhs - rhs;
+            },
+            py::is_operator())
+        .def(
             "__mul__",
             [](const cinder::Tensor &lhs, const cinder::Tensor &rhs) {
               return lhs * rhs;
             },
             py::is_operator())
         .def(
+            "__mul__",
+            [](const cinder::Tensor &lhs, cinder::Tensor::value_type rhs) {
+              return lhs * rhs;
+            },
+            py::is_operator())
+        .def(
+            "__rmul__",
+            [](const cinder::Tensor &rhs, cinder::Tensor::value_type lhs) {
+              return lhs * rhs;
+            },
+            py::is_operator())
+        .def(
             "__truediv__",
             [](const cinder::Tensor &lhs, const cinder::Tensor &rhs) {
+              return lhs / rhs;
+            },
+            py::is_operator())
+        .def(
+            "__truediv__",
+            [](const cinder::Tensor &lhs, cinder::Tensor::value_type rhs) {
+              return lhs / rhs;
+            },
+            py::is_operator())
+        .def(
+            "__rtruediv__",
+            [](const cinder::Tensor &rhs, cinder::Tensor::value_type lhs) {
               return lhs / rhs;
             },
             py::is_operator())

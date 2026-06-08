@@ -10,7 +10,7 @@ class Tensor:
     Tensor owns a single packed CUDA allocation containing metadata and data.
     Python exposes only the high-level tensor object: construction, shape
     inspection, host readback, elementwise arithmetic operators, tensor product,
-    transpose, contraction, and mode multiplication.
+    transpose, contraction, mode multiplication, inner products, and norms.
     """
 
     @overload
@@ -68,20 +68,72 @@ class Tensor:
         """Return the mode multiplication of ``self`` by ``matrix`` along ``mode``."""
         ...
 
+    def inner(self, other: Tensor) -> Tensor:
+        """Return the inner product of ``self`` and ``other`` as a rank-0 tensor."""
+        ...
+
+    def dot(self, other: Tensor) -> Tensor:
+        """Return the dot-product alias of ``inner`` as a rank-0 tensor."""
+        ...
+
+    def norm(self) -> Tensor:
+        """Return the L2 norm of ``self`` as a rank-0 tensor."""
+        ...
+
+    @overload
     def __add__(self, other: Tensor) -> Tensor:
         """Return elementwise ``self + other``."""
         ...
 
+    @overload
+    def __add__(self, other: float) -> Tensor:
+        """Return elementwise ``self + other``."""
+        ...
+
+    def __radd__(self, other: float) -> Tensor:
+        """Return elementwise ``other + self``."""
+        ...
+
+    @overload
     def __sub__(self, other: Tensor) -> Tensor:
         """Return elementwise ``self - other``."""
         ...
 
+    @overload
+    def __sub__(self, other: float) -> Tensor:
+        """Return elementwise ``self - other``."""
+        ...
+
+    def __rsub__(self, other: float) -> Tensor:
+        """Return elementwise ``other - self``."""
+        ...
+
+    @overload
     def __mul__(self, other: Tensor) -> Tensor:
         """Return elementwise ``self * other``."""
         ...
 
+    @overload
+    def __mul__(self, other: float) -> Tensor:
+        """Return elementwise ``self * other``."""
+        ...
+
+    def __rmul__(self, other: float) -> Tensor:
+        """Return elementwise ``other * self``."""
+        ...
+
+    @overload
     def __truediv__(self, other: Tensor) -> Tensor:
         """Return elementwise ``self / other``."""
+        ...
+
+    @overload
+    def __truediv__(self, other: float) -> Tensor:
+        """Return elementwise ``self / other``."""
+        ...
+
+    def __rtruediv__(self, other: float) -> Tensor:
+        """Return elementwise ``other / self``."""
         ...
 
     def __repr__(self) -> str:

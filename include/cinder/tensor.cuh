@@ -445,6 +445,37 @@ namespace cinder
      */
     [[nodiscard]] auto mode_multiply(const Tensor &matrix, size_type mode) const -> Tensor;
 
+    /**
+     * @brief 计算当前 Tensor 与另一个 Tensor 的内积。Compute the inner product of this Tensor and another Tensor.
+     *
+     * @param rhs 右侧 Tensor。Right-hand side Tensor.
+     * @return rank-0 Tensor 形式的内积结果。Inner-product result as a rank-0 Tensor.
+     *
+     * @note 输入 shape 必须完全相同；结果 data 由 CUDA reduction kernel 写入，调用方可用 to_vector() 显式拷回 host。
+     *       Input shapes must match exactly; result data is written by a CUDA reduction kernel, and callers can explicitly copy it back with to_vector().
+     */
+    [[nodiscard]] auto inner(const Tensor &rhs) const -> Tensor;
+
+    /**
+     * @brief 计算当前 Tensor 与另一个 Tensor 的点积别名。Compute the dot-product alias of this Tensor and another Tensor.
+     *
+     * @param rhs 右侧 Tensor。Right-hand side Tensor.
+     * @return rank-0 Tensor 形式的点积结果。Dot-product result as a rank-0 Tensor.
+     *
+     * @note dot() 与 inner() 等价。dot() is equivalent to inner().
+     */
+    [[nodiscard]] auto dot(const Tensor &rhs) const -> Tensor;
+
+    /**
+     * @brief 计算当前 Tensor 的 L2 范数。Compute the L2 norm of this Tensor.
+     *
+     * @return rank-0 Tensor 形式的 L2 范数。L2-norm result as a rank-0 Tensor.
+     *
+     * @note 空乘积以外的零元素 Tensor 返回 0；sqrt 由 reduction kernel 完成，避免额外 host 拷贝。
+     *       A zero-element Tensor returns 0; sqrt is completed by the reduction kernel to avoid an extra host copy.
+     */
+    [[nodiscard]] auto norm() const -> Tensor;
+
   private:
     /**
      * @brief 允许加法运算符访问私有二元运算入口。Allow the addition operator to access the private binary operation entry point.
@@ -465,6 +496,46 @@ namespace cinder
      * @brief 允许除法运算符访问私有二元运算入口。Allow the division operator to access the private binary operation entry point.
      */
     friend auto operator/(const Tensor &lhs, const Tensor &rhs) -> Tensor;
+
+    /**
+     * @brief 允许 Tensor 加标量运算符访问私有标量运算入口。Allow Tensor-plus-scalar operators to access the private scalar operation entry point.
+     */
+    friend auto operator+(const Tensor &lhs, value_type rhs) -> Tensor;
+
+    /**
+     * @brief 允许标量加 Tensor 运算符访问私有标量运算入口。Allow scalar-plus-Tensor operators to access the private scalar operation entry point.
+     */
+    friend auto operator+(value_type lhs, const Tensor &rhs) -> Tensor;
+
+    /**
+     * @brief 允许 Tensor 减标量运算符访问私有标量运算入口。Allow Tensor-minus-scalar operators to access the private scalar operation entry point.
+     */
+    friend auto operator-(const Tensor &lhs, value_type rhs) -> Tensor;
+
+    /**
+     * @brief 允许标量减 Tensor 运算符访问私有标量运算入口。Allow scalar-minus-Tensor operators to access the private scalar operation entry point.
+     */
+    friend auto operator-(value_type lhs, const Tensor &rhs) -> Tensor;
+
+    /**
+     * @brief 允许 Tensor 乘标量运算符访问私有标量运算入口。Allow Tensor-times-scalar operators to access the private scalar operation entry point.
+     */
+    friend auto operator*(const Tensor &lhs, value_type rhs) -> Tensor;
+
+    /**
+     * @brief 允许标量乘 Tensor 运算符访问私有标量运算入口。Allow scalar-times-Tensor operators to access the private scalar operation entry point.
+     */
+    friend auto operator*(value_type lhs, const Tensor &rhs) -> Tensor;
+
+    /**
+     * @brief 允许 Tensor 除标量运算符访问私有标量运算入口。Allow Tensor-divided-by-scalar operators to access the private scalar operation entry point.
+     */
+    friend auto operator/(const Tensor &lhs, value_type rhs) -> Tensor;
+
+    /**
+     * @brief 允许标量除 Tensor 运算符访问私有标量运算入口。Allow scalar-divided-by-Tensor operators to access the private scalar operation entry point.
+     */
+    friend auto operator/(value_type lhs, const Tensor &rhs) -> Tensor;
 
     /**
      * @brief 允许张量积函数构造未初始化输出 Tensor。Allow tensor_product to construct an uninitialized output Tensor.
@@ -495,6 +566,16 @@ namespace cinder
     friend auto mode_multiply(const Tensor &input, const Tensor &matrix, size_type mode) -> Tensor;
 
     /**
+     * @brief 允许内积函数构造未初始化输出 Tensor。Allow inner to construct an uninitialized output Tensor.
+     */
+    friend auto inner(const Tensor &lhs, const Tensor &rhs) -> Tensor;
+
+    /**
+     * @brief 允许范数函数构造未初始化输出 Tensor。Allow norm to construct an uninitialized output Tensor.
+     */
+    friend auto norm(const Tensor &input) -> Tensor;
+
+    /**
      * @brief 不初始化 device storage 的构造标签。Construction tag for uninitialized device storage.
      */
     struct UninitializedTag final
@@ -518,6 +599,20 @@ namespace cinder
      * @return 运算结果 Tensor。Result Tensor.
      */
     [[nodiscard]] static auto binary(const Tensor &lhs, const Tensor &rhs, unsigned int operation) -> Tensor;
+
+    /**
+     * @brief 执行逐元素 Tensor-标量二元运算。Run an elementwise Tensor-scalar binary operation.
+     *
+     * @param input 输入 Tensor。Input Tensor.
+     * @param scalar_value 标量值。Scalar value.
+     * @param operation 二元运算码。Binary operation code.
+     * @param scalar_on_left 标量是否位于左操作数。Whether the scalar is the left-hand operand.
+     * @return 运算结果 Tensor。Result Tensor.
+     */
+    [[nodiscard]] static auto scalar(const Tensor &input,
+                                     value_type scalar_value,
+                                     unsigned int operation,
+                                     bool scalar_on_left) -> Tensor;
 
     /**
      * @brief 返回 device extent 元数据指针。Return the device extent metadata pointer.
@@ -632,6 +727,78 @@ namespace cinder
   [[nodiscard]] auto operator/(const Tensor &lhs, const Tensor &rhs) -> Tensor;
 
   /**
+   * @brief Tensor 与标量逐元素加法运算符。Elementwise Tensor-plus-scalar operator.
+   *
+   * @param lhs 左侧 Tensor。Left-hand side Tensor.
+   * @param rhs 右侧标量。Right-hand side scalar.
+   * @return 加法结果 Tensor。Addition result Tensor.
+   */
+  [[nodiscard]] auto operator+(const Tensor &lhs, Tensor::value_type rhs) -> Tensor;
+
+  /**
+   * @brief 标量与 Tensor 逐元素加法运算符。Elementwise scalar-plus-Tensor operator.
+   *
+   * @param lhs 左侧标量。Left-hand side scalar.
+   * @param rhs 右侧 Tensor。Right-hand side Tensor.
+   * @return 加法结果 Tensor。Addition result Tensor.
+   */
+  [[nodiscard]] auto operator+(Tensor::value_type lhs, const Tensor &rhs) -> Tensor;
+
+  /**
+   * @brief Tensor 与标量逐元素减法运算符。Elementwise Tensor-minus-scalar operator.
+   *
+   * @param lhs 左侧 Tensor。Left-hand side Tensor.
+   * @param rhs 右侧标量。Right-hand side scalar.
+   * @return 减法结果 Tensor。Subtraction result Tensor.
+   */
+  [[nodiscard]] auto operator-(const Tensor &lhs, Tensor::value_type rhs) -> Tensor;
+
+  /**
+   * @brief 标量与 Tensor 逐元素减法运算符。Elementwise scalar-minus-Tensor operator.
+   *
+   * @param lhs 左侧标量。Left-hand side scalar.
+   * @param rhs 右侧 Tensor。Right-hand side Tensor.
+   * @return 减法结果 Tensor。Subtraction result Tensor.
+   */
+  [[nodiscard]] auto operator-(Tensor::value_type lhs, const Tensor &rhs) -> Tensor;
+
+  /**
+   * @brief Tensor 与标量逐元素乘法运算符。Elementwise Tensor-times-scalar operator.
+   *
+   * @param lhs 左侧 Tensor。Left-hand side Tensor.
+   * @param rhs 右侧标量。Right-hand side scalar.
+   * @return 乘法结果 Tensor。Multiplication result Tensor.
+   */
+  [[nodiscard]] auto operator*(const Tensor &lhs, Tensor::value_type rhs) -> Tensor;
+
+  /**
+   * @brief 标量与 Tensor 逐元素乘法运算符。Elementwise scalar-times-Tensor operator.
+   *
+   * @param lhs 左侧标量。Left-hand side scalar.
+   * @param rhs 右侧 Tensor。Right-hand side Tensor.
+   * @return 乘法结果 Tensor。Multiplication result Tensor.
+   */
+  [[nodiscard]] auto operator*(Tensor::value_type lhs, const Tensor &rhs) -> Tensor;
+
+  /**
+   * @brief Tensor 与标量逐元素除法运算符。Elementwise Tensor-divided-by-scalar operator.
+   *
+   * @param lhs 左侧 Tensor。Left-hand side Tensor.
+   * @param rhs 右侧标量。Right-hand side scalar.
+   * @return 除法结果 Tensor。Division result Tensor.
+   */
+  [[nodiscard]] auto operator/(const Tensor &lhs, Tensor::value_type rhs) -> Tensor;
+
+  /**
+   * @brief 标量与 Tensor 逐元素除法运算符。Elementwise scalar-divided-by-Tensor operator.
+   *
+   * @param lhs 左侧标量。Left-hand side scalar.
+   * @param rhs 右侧 Tensor。Right-hand side Tensor.
+   * @return 除法结果 Tensor。Division result Tensor.
+   */
+  [[nodiscard]] auto operator/(Tensor::value_type lhs, const Tensor &rhs) -> Tensor;
+
+  /**
    * @brief 计算两个 Tensor 的张量积。Compute the tensor product of two Tensors.
    *
    * @param lhs 左侧 Tensor。Left-hand side Tensor.
@@ -703,5 +870,27 @@ namespace cinder
    *       then output shape is [I0, ..., J, ..., Ik], with a sum of products along the selected mode coordinate.
    */
   [[nodiscard]] auto mode_multiply(const Tensor &input, const Tensor &matrix, Tensor::size_type mode) -> Tensor;
+
+  /**
+   * @brief 计算两个 Tensor 的内积。Compute the inner product of two Tensors.
+   *
+   * @param lhs 左侧 Tensor。Left-hand side Tensor.
+   * @param rhs 右侧 Tensor。Right-hand side Tensor.
+   * @return rank-0 Tensor 形式的内积结果。Inner-product result as a rank-0 Tensor.
+   *
+   * @note 输入 shape 必须完全相同；结果等于 sum_i lhs.linear(i) * rhs.linear(i)。
+   *       Input shapes must match exactly; the result is sum_i lhs.linear(i) * rhs.linear(i).
+   */
+  [[nodiscard]] auto inner(const Tensor &lhs, const Tensor &rhs) -> Tensor;
+
+  /**
+   * @brief 计算 Tensor 的 L2 范数。Compute the L2 norm of a Tensor.
+   *
+   * @param input 输入 Tensor。Input Tensor.
+   * @return rank-0 Tensor 形式的 L2 范数。L2-norm result as a rank-0 Tensor.
+   *
+   * @note 结果等于 sqrt(sum_i input.linear(i)^2)。The result is sqrt(sum_i input.linear(i)^2).
+   */
+  [[nodiscard]] auto norm(const Tensor &input) -> Tensor;
 
 } // namespace cinder

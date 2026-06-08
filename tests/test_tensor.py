@@ -137,8 +137,23 @@ def test_public_api_exposes_tensor_only() -> None:
     assert hasattr(Tensor, "transpose")
     assert hasattr(Tensor, "contract")
     assert hasattr(Tensor, "mode_multiply")
+    assert hasattr(Tensor, "inner")
+    assert hasattr(Tensor, "dot")
+    assert hasattr(Tensor, "norm")
 
-    for name in ("add", "subtract", "multiply", "divide", "tensor_product", "transpose", "contract", "mode_multiply"):
+    for name in (
+        "add",
+        "subtract",
+        "multiply",
+        "divide",
+        "tensor_product",
+        "transpose",
+        "contract",
+        "mode_multiply",
+        "inner",
+        "dot",
+        "norm",
+    ):
         assert not hasattr(cinder, name)
         assert not hasattr(core, name)
 
@@ -204,11 +219,33 @@ def test_tensor_elementwise_operators() -> None:
     assert_tensor(lhs / rhs, [2, 2], [4.0, -2.0, -3.0, 0.4])
 
 
+def test_tensor_scalar_operators_support_both_operand_orders() -> None:
+    tensor = Tensor([2, 2], [8.0, -6.0, 4.5, 2.0])
+
+    assert_tensor(tensor + 2.5, [2, 2], [10.5, -3.5, 7.0, 4.5])
+    assert_tensor(2.5 + tensor, [2, 2], [10.5, -3.5, 7.0, 4.5])
+    assert_tensor(tensor - 1.5, [2, 2], [6.5, -7.5, 3.0, 0.5])
+    assert_tensor(10.0 - tensor, [2, 2], [2.0, 16.0, 5.5, 8.0])
+    assert_tensor(tensor * -2.0, [2, 2], [-16.0, 12.0, -9.0, -4.0])
+    assert_tensor(-2.0 * tensor, [2, 2], [-16.0, 12.0, -9.0, -4.0])
+    assert_tensor(tensor / 2.0, [2, 2], [4.0, -3.0, 2.25, 1.0])
+    assert_tensor(18.0 / tensor, [2, 2], [2.25, -3.0, 4.0, 9.0])
+
+
+def test_tensor_scalar_operators_preserve_zero_extent_shape() -> None:
+    tensor = Tensor([2, 0, 3])
+
+    assert_tensor(tensor + 1.0, [2, 0, 3], [])
+    assert_tensor(1.0 - tensor, [2, 0, 3], [])
+    assert_tensor(tensor * 2.0, [2, 0, 3], [])
+    assert_tensor(2.0 / tensor, [2, 0, 3], [])
+
+
 def test_tensor_chained_operations_reuse_kernel_written_metadata() -> None:
     lhs = Tensor([2], [5.0, 7.0])
     rhs = Tensor([2], [2.0, 3.0])
 
-    assert_tensor((lhs + rhs) * (lhs - rhs), [2], [21.0, 40.0])
+    assert_tensor(((lhs + rhs) * (lhs - rhs)) + 1.0, [2], [22.0, 41.0])
 
 
 def test_tensor_operations_do_not_mutate_inputs() -> None:
@@ -334,6 +371,42 @@ def test_tensor_contract_zero_free_extent_preserves_shape() -> None:
     assert_tensor(lhs.contract(rhs, [2], [0]), [2, 0], [])
 
 
+def test_tensor_inner_product_returns_rank_zero_tensor() -> None:
+    lhs = Tensor([2, 2], [1.0, -2.0, 3.5, 4.0])
+    rhs = Tensor([2, 2], [5.0, 6.0, -1.0, 2.0])
+
+    assert_tensor(lhs.inner(rhs), [], [-2.5])
+    assert_tensor(lhs.dot(rhs), [], [-2.5])
+
+
+def test_tensor_inner_product_zero_extent_returns_zero_scalar() -> None:
+    lhs = Tensor([2, 0, 3])
+    rhs = Tensor([2, 0, 3])
+
+    assert_tensor(lhs.inner(rhs), [], [0.0])
+
+
+def test_tensor_norm_returns_rank_zero_l2_norm() -> None:
+    tensor = Tensor([3], [3.0, 4.0, 12.0])
+
+    assert_tensor(tensor.norm(), [], [13.0])
+
+
+def test_tensor_norm_zero_extent_returns_zero_scalar() -> None:
+    tensor = Tensor([2, 0, 3])
+
+    assert_tensor(tensor.norm(), [], [0.0])
+
+
+def test_tensor_reductions_support_multi_block_inputs() -> None:
+    size = 2049
+    lhs = Tensor([size], [1.0] * size)
+    rhs = Tensor([size], [2.0] * size)
+
+    assert_tensor(lhs.inner(rhs), [], [2.0 * size])
+    assert_tensor(lhs.norm(), [], [math.sqrt(size)])
+
+
 def test_tensor_mode_multiply_matrix_mode_1() -> None:
     tensor = Tensor([2, 3], [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
     matrix = Tensor([2, 3], [10.0, 20.0, 30.0, -1.0, 0.0, 2.0])
@@ -383,6 +456,22 @@ def test_tensor_division_follows_float32_cuda_semantics_for_zero_divisor() -> No
     assert math.isnan(values[2])
 
 
+def test_tensor_scalar_division_follows_float32_cuda_semantics_for_zero_divisor() -> None:
+    tensor_divided_by_zero = Tensor([3], [1.0, -1.0, 0.0]) / 0.0
+    values = tensor_divided_by_zero.to_list()
+
+    assert math.isinf(values[0]) and values[0] > 0.0
+    assert math.isinf(values[1]) and values[1] < 0.0
+    assert math.isnan(values[2])
+
+    zero_divided_by_tensor = 0.0 / Tensor([3], [1.0, -1.0, 0.0])
+    reverse_values = zero_divided_by_tensor.to_list()
+
+    assert reverse_values[0] == pytest.approx(0.0)
+    assert reverse_values[1] == pytest.approx(-0.0)
+    assert math.isnan(reverse_values[2])
+
+
 @pytest.mark.parametrize(
     ("shape", "values"),
     [
@@ -411,18 +500,23 @@ def test_tensor_rejects_shape_mismatch(lhs_shape: list[int], rhs_shape: list[int
     with pytest.raises(ValueError, match="shapes must match"):
         _ = lhs + rhs
 
+    with pytest.raises(ValueError, match="shapes must match"):
+        lhs.inner(rhs)
+
 
 @pytest.mark.parametrize(
     "expression",
     [
-        lambda tensor: tensor + 1.0,
-        lambda tensor: 1.0 + tensor,
+        lambda tensor: tensor + object(),
+        lambda tensor: object() + tensor,
         lambda tensor: tensor - object(),
         lambda tensor: object() * tensor,
         lambda tensor: tensor.tensor_product(object()),
         lambda tensor: tensor.transpose(object()),
         lambda tensor: tensor.contract(object(), [], []),
         lambda tensor: tensor.mode_multiply(object(), 0),
+        lambda tensor: tensor.inner(object()),
+        lambda tensor: tensor.dot(object()),
     ],
 )
 def test_tensor_rejects_non_tensor_operands(expression) -> None:

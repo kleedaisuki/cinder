@@ -19,6 +19,32 @@ namespace
   constexpr unsigned int k_tensor_threads_per_block = 256U;
 
   /**
+   * @brief translation-unit 内部 Tensor 二元运算码。Translation-unit local Tensor binary operation code.
+   */
+  enum class TensorBinaryOperation : unsigned int
+  {
+    /**
+     * @brief 加法。Addition.
+     */
+    plus,
+
+    /**
+     * @brief 减法。Subtraction.
+     */
+    minus,
+
+    /**
+     * @brief 乘法。Multiplication.
+     */
+    times,
+
+    /**
+     * @brief 除法。Division.
+     */
+    quotient
+  };
+
+  /**
    * @brief 把 size_t 值相加并检查溢出。Add size_t values with overflow checking.
    *
    * @param lhs 左操作数。Left operand.
@@ -236,18 +262,18 @@ namespace
    */
   [[nodiscard]] __device__ auto apply_binary_operation(cinder::Tensor::value_type lhs,
                                                        cinder::Tensor::value_type rhs,
-                                                       cinder::TensorBinaryOperation operation) noexcept
+                                                       TensorBinaryOperation operation) noexcept
       -> cinder::Tensor::value_type
   {
     switch (operation)
     {
-    case cinder::TensorBinaryOperation::add:
+    case TensorBinaryOperation::plus:
       return lhs + rhs;
-    case cinder::TensorBinaryOperation::subtract:
+    case TensorBinaryOperation::minus:
       return lhs - rhs;
-    case cinder::TensorBinaryOperation::multiply:
+    case TensorBinaryOperation::times:
       return lhs * rhs;
-    case cinder::TensorBinaryOperation::divide:
+    case TensorBinaryOperation::quotient:
       return lhs / rhs;
     }
 
@@ -268,7 +294,7 @@ namespace
   __global__ void tensor_binary_kernel(cinder::ConstTensorDeviceBuffer lhs,
                                        cinder::ConstTensorDeviceBuffer rhs,
                                        cinder::TensorDeviceBuffer output,
-                                       cinder::TensorBinaryOperation operation)
+                                       TensorBinaryOperation operation)
   {
     /**
      * @brief 左侧 packed storage header。Left-hand side packed storage header.
@@ -332,7 +358,7 @@ namespace
   auto launch_tensor_binary_kernel(const cinder::Tensor &lhs,
                                    const cinder::Tensor &rhs,
                                    cinder::Tensor &output,
-                                   cinder::TensorBinaryOperation operation) -> void
+                                   TensorBinaryOperation operation) -> void
   {
     /**
      * @brief 至少包含一个线程以便零元素 Tensor 也能写 metadata。At least one work item so zero-element tensors still write metadata.
@@ -601,7 +627,7 @@ namespace cinder
    * @param operation 二元运算码。Binary operation code.
    * @return 运算结果 Tensor。Result Tensor.
    */
-  auto Tensor::binary(const Tensor &lhs, const Tensor &rhs, TensorBinaryOperation operation) -> Tensor
+  auto Tensor::binary(const Tensor &lhs, const Tensor &rhs, unsigned int operation) -> Tensor
   {
     if (lhs.empty() || rhs.empty())
     {
@@ -618,7 +644,7 @@ namespace cinder
      */
     Tensor output(lhs.extents_, UninitializedTag{});
 
-    launch_tensor_binary_kernel(lhs, rhs, output, operation);
+    launch_tensor_binary_kernel(lhs, rhs, output, static_cast<TensorBinaryOperation>(operation));
 
     return output;
   }
@@ -771,54 +797,6 @@ namespace cinder
   }
 
   /**
-   * @brief 逐元素加法。Elementwise addition.
-   *
-   * @param lhs 左侧 Tensor。Left-hand side Tensor.
-   * @param rhs 右侧 Tensor。Right-hand side Tensor.
-   * @return 加法结果 Tensor。Addition result Tensor.
-   */
-  auto add(const Tensor &lhs, const Tensor &rhs) -> Tensor
-  {
-    return Tensor::binary(lhs, rhs, TensorBinaryOperation::add);
-  }
-
-  /**
-   * @brief 逐元素减法。Elementwise subtraction.
-   *
-   * @param lhs 左侧 Tensor。Left-hand side Tensor.
-   * @param rhs 右侧 Tensor。Right-hand side Tensor.
-   * @return 减法结果 Tensor。Subtraction result Tensor.
-   */
-  auto subtract(const Tensor &lhs, const Tensor &rhs) -> Tensor
-  {
-    return Tensor::binary(lhs, rhs, TensorBinaryOperation::subtract);
-  }
-
-  /**
-   * @brief 逐元素乘法。Elementwise multiplication.
-   *
-   * @param lhs 左侧 Tensor。Left-hand side Tensor.
-   * @param rhs 右侧 Tensor。Right-hand side Tensor.
-   * @return 乘法结果 Tensor。Multiplication result Tensor.
-   */
-  auto multiply(const Tensor &lhs, const Tensor &rhs) -> Tensor
-  {
-    return Tensor::binary(lhs, rhs, TensorBinaryOperation::multiply);
-  }
-
-  /**
-   * @brief 逐元素除法。Elementwise division.
-   *
-   * @param lhs 左侧 Tensor。Left-hand side Tensor.
-   * @param rhs 右侧 Tensor。Right-hand side Tensor.
-   * @return 除法结果 Tensor。Division result Tensor.
-   */
-  auto divide(const Tensor &lhs, const Tensor &rhs) -> Tensor
-  {
-    return Tensor::binary(lhs, rhs, TensorBinaryOperation::divide);
-  }
-
-  /**
    * @brief 逐元素加法运算符。Elementwise addition operator.
    *
    * @param lhs 左侧 Tensor。Left-hand side Tensor.
@@ -827,7 +805,7 @@ namespace cinder
    */
   auto operator+(const Tensor &lhs, const Tensor &rhs) -> Tensor
   {
-    return add(lhs, rhs);
+    return Tensor::binary(lhs, rhs, static_cast<unsigned int>(TensorBinaryOperation::plus));
   }
 
   /**
@@ -839,7 +817,7 @@ namespace cinder
    */
   auto operator-(const Tensor &lhs, const Tensor &rhs) -> Tensor
   {
-    return subtract(lhs, rhs);
+    return Tensor::binary(lhs, rhs, static_cast<unsigned int>(TensorBinaryOperation::minus));
   }
 
   /**
@@ -851,7 +829,7 @@ namespace cinder
    */
   auto operator*(const Tensor &lhs, const Tensor &rhs) -> Tensor
   {
-    return multiply(lhs, rhs);
+    return Tensor::binary(lhs, rhs, static_cast<unsigned int>(TensorBinaryOperation::times));
   }
 
   /**
@@ -863,7 +841,7 @@ namespace cinder
    */
   auto operator/(const Tensor &lhs, const Tensor &rhs) -> Tensor
   {
-    return divide(lhs, rhs);
+    return Tensor::binary(lhs, rhs, static_cast<unsigned int>(TensorBinaryOperation::quotient));
   }
 
 } // namespace cinder

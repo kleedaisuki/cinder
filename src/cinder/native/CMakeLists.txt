@@ -58,7 +58,6 @@ find_package(pybind11 CONFIG REQUIRED)
 
 set(cinder_native_sources
   bindings.cpp
-  add.cpp
 )
 
 if(CINDER_ENABLE_CUDA)

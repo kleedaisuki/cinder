@@ -30,32 +30,6 @@ namespace cinder
   };
 
   /**
-   * @brief Tensor 的逐元素二元运算码。Elementwise binary operation code for Tensor.
-   */
-  enum class TensorBinaryOperation
-  {
-    /**
-     * @brief 加法（addition）。Addition.
-     */
-    add,
-
-    /**
-     * @brief 减法（subtraction）。Subtraction.
-     */
-    subtract,
-
-    /**
-     * @brief 乘法（multiplication）。Multiplication.
-     */
-    multiply,
-
-    /**
-     * @brief 除法（division）。Division.
-     */
-    divide
-  };
-
-  /**
    * @brief 可变 packed Tensor device allocation 描述符。Mutable packed Tensor device allocation descriptor.
    *
    * @note 该描述符只保存 device allocation 起点与 data 偏移，适合按值传入 CUDA kernel。
@@ -412,17 +386,27 @@ namespace cinder
      */
     [[nodiscard]] auto to_vector() const -> std::vector<value_type>;
 
-    /**
-     * @brief 执行逐元素二元运算。Run an elementwise binary operation.
-     *
-     * @param lhs 左侧 Tensor。Left-hand side Tensor.
-     * @param rhs 右侧 Tensor。Right-hand side Tensor.
-     * @param operation 二元运算码。Binary operation code.
-     * @return 运算结果 Tensor。Result Tensor.
-     */
-    [[nodiscard]] static auto binary(const Tensor &lhs, const Tensor &rhs, TensorBinaryOperation operation) -> Tensor;
-
   private:
+    /**
+     * @brief 允许加法运算符访问私有二元运算入口。Allow the addition operator to access the private binary operation entry point.
+     */
+    friend auto operator+(const Tensor &lhs, const Tensor &rhs) -> Tensor;
+
+    /**
+     * @brief 允许减法运算符访问私有二元运算入口。Allow the subtraction operator to access the private binary operation entry point.
+     */
+    friend auto operator-(const Tensor &lhs, const Tensor &rhs) -> Tensor;
+
+    /**
+     * @brief 允许乘法运算符访问私有二元运算入口。Allow the multiplication operator to access the private binary operation entry point.
+     */
+    friend auto operator*(const Tensor &lhs, const Tensor &rhs) -> Tensor;
+
+    /**
+     * @brief 允许除法运算符访问私有二元运算入口。Allow the division operator to access the private binary operation entry point.
+     */
+    friend auto operator/(const Tensor &lhs, const Tensor &rhs) -> Tensor;
+
     /**
      * @brief 不初始化 device storage 的构造标签。Construction tag for uninitialized device storage.
      */
@@ -437,6 +421,16 @@ namespace cinder
      * @param tag 未初始化标签。Uninitialized tag.
      */
     Tensor(std::vector<size_type> extents, UninitializedTag tag);
+
+    /**
+     * @brief 执行逐元素二元运算。Run an elementwise binary operation.
+     *
+     * @param lhs 左侧 Tensor。Left-hand side Tensor.
+     * @param rhs 右侧 Tensor。Right-hand side Tensor.
+     * @param operation 二元运算码。Binary operation code.
+     * @return 运算结果 Tensor。Result Tensor.
+     */
+    [[nodiscard]] static auto binary(const Tensor &lhs, const Tensor &rhs, unsigned int operation) -> Tensor;
 
     /**
      * @brief 返回 device extent 元数据指针。Return the device extent metadata pointer.
@@ -513,42 +507,6 @@ namespace cinder
      */
     size_type data_offset_{};
   };
-
-  /**
-   * @brief 逐元素加法。Elementwise addition.
-   *
-   * @param lhs 左侧 Tensor。Left-hand side Tensor.
-   * @param rhs 右侧 Tensor。Right-hand side Tensor.
-   * @return 加法结果 Tensor。Addition result Tensor.
-   */
-  [[nodiscard]] auto add(const Tensor &lhs, const Tensor &rhs) -> Tensor;
-
-  /**
-   * @brief 逐元素减法。Elementwise subtraction.
-   *
-   * @param lhs 左侧 Tensor。Left-hand side Tensor.
-   * @param rhs 右侧 Tensor。Right-hand side Tensor.
-   * @return 减法结果 Tensor。Subtraction result Tensor.
-   */
-  [[nodiscard]] auto subtract(const Tensor &lhs, const Tensor &rhs) -> Tensor;
-
-  /**
-   * @brief 逐元素乘法。Elementwise multiplication.
-   *
-   * @param lhs 左侧 Tensor。Left-hand side Tensor.
-   * @param rhs 右侧 Tensor。Right-hand side Tensor.
-   * @return 乘法结果 Tensor。Multiplication result Tensor.
-   */
-  [[nodiscard]] auto multiply(const Tensor &lhs, const Tensor &rhs) -> Tensor;
-
-  /**
-   * @brief 逐元素除法。Elementwise division.
-   *
-   * @param lhs 左侧 Tensor。Left-hand side Tensor.
-   * @param rhs 右侧 Tensor。Right-hand side Tensor.
-   * @return 除法结果 Tensor。Division result Tensor.
-   */
-  [[nodiscard]] auto divide(const Tensor &lhs, const Tensor &rhs) -> Tensor;
 
   /**
    * @brief 逐元素加法运算符。Elementwise addition operator.

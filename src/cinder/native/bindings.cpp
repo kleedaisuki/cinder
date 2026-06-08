@@ -1,8 +1,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include "cinder/add.hpp"
-
 #if defined(CINDER_HAS_CUDA)
 #include "cinder/tensor.cuh"
 #endif
@@ -140,50 +138,6 @@ namespace
             Copy Tensor data back to a Python list.
             )pbdoc")
         .def(
-            "add",
-            [](const cinder::Tensor &lhs, const cinder::Tensor &rhs) {
-              return cinder::add(lhs, rhs);
-            },
-            py::arg("other"),
-            R"pbdoc(
-            逐元素加法。
-
-            Elementwise addition.
-            )pbdoc")
-        .def(
-            "subtract",
-            [](const cinder::Tensor &lhs, const cinder::Tensor &rhs) {
-              return cinder::subtract(lhs, rhs);
-            },
-            py::arg("other"),
-            R"pbdoc(
-            逐元素减法。
-
-            Elementwise subtraction.
-            )pbdoc")
-        .def(
-            "multiply",
-            [](const cinder::Tensor &lhs, const cinder::Tensor &rhs) {
-              return cinder::multiply(lhs, rhs);
-            },
-            py::arg("other"),
-            R"pbdoc(
-            逐元素乘法。
-
-            Elementwise multiplication.
-            )pbdoc")
-        .def(
-            "divide",
-            [](const cinder::Tensor &lhs, const cinder::Tensor &rhs) {
-              return cinder::divide(lhs, rhs);
-            },
-            py::arg("other"),
-            R"pbdoc(
-            逐元素除法。
-
-            Elementwise division.
-            )pbdoc")
-        .def(
             "__add__",
             [](const cinder::Tensor &lhs, const cinder::Tensor &rhs) {
               return lhs + rhs;
@@ -208,50 +162,6 @@ namespace
             },
             py::is_operator())
         .def("__repr__", &tensor_repr);
-
-    module.def(
-        "add",
-        static_cast<cinder::Tensor (*)(const cinder::Tensor &, const cinder::Tensor &)>(&cinder::add),
-        py::arg("lhs"),
-        py::arg("rhs"),
-        R"pbdoc(
-        逐元素 Tensor 加法。
-
-        Elementwise Tensor addition.
-        )pbdoc");
-
-    module.def(
-        "subtract",
-        &cinder::subtract,
-        py::arg("lhs"),
-        py::arg("rhs"),
-        R"pbdoc(
-        逐元素 Tensor 减法。
-
-        Elementwise Tensor subtraction.
-        )pbdoc");
-
-    module.def(
-        "multiply",
-        &cinder::multiply,
-        py::arg("lhs"),
-        py::arg("rhs"),
-        R"pbdoc(
-        逐元素 Tensor 乘法。
-
-        Elementwise Tensor multiplication.
-        )pbdoc");
-
-    module.def(
-        "divide",
-        &cinder::divide,
-        py::arg("lhs"),
-        py::arg("rhs"),
-        R"pbdoc(
-        逐元素 Tensor 除法。
-
-        Elementwise Tensor division.
-        )pbdoc");
   }
 
 } // namespace
@@ -267,17 +177,6 @@ namespace
 PYBIND11_MODULE(core, module)
 {
   module.doc() = "Native C++ extension module for cinder.";
-
-  module.def(
-      "add",
-      static_cast<int (*)(int, int) noexcept>(&cinder::add),
-      py::arg("lhs"),
-      py::arg("rhs"),
-      R"pbdoc(
-      返回两个整数的和。
-
-      Return the sum of two integers.
-      )pbdoc");
 
 #if defined(CINDER_HAS_CUDA)
   bind_tensor(module);

@@ -1,10 +1,8 @@
 """Python entry points for Cinder's C++ extension module."""
 
-from .core import add
-
 try:
-    from .core import Tensor, divide, multiply, subtract
+    from .core import Tensor
 except ImportError:
-    __all__ = ["add"]
+    __all__: list[str] = []
 else:
-    __all__ = ["Tensor", "add", "divide", "multiply", "subtract"]
+    __all__ = ["Tensor"]

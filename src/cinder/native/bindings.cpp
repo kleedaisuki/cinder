@@ -176,6 +176,16 @@ namespace
             Return the contraction of this Tensor and another Tensor along axis pairs.
             )pbdoc")
         .def(
+            "mode_multiply",
+            &cinder::Tensor::mode_multiply,
+            py::arg("matrix"),
+            py::arg("mode"),
+            R"pbdoc(
+            沿指定 mode 返回当前 Tensor 与矩阵的乘法。
+
+            Return the mode multiplication of this Tensor and a matrix.
+            )pbdoc")
+        .def(
             "__add__",
             [](const cinder::Tensor &lhs, const cinder::Tensor &rhs) {
               return lhs + rhs;

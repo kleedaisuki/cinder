@@ -433,6 +433,18 @@ namespace cinder
                                 const std::vector<size_type> &lhs_axes,
                                 const std::vector<size_type> &rhs_axes) const -> Tensor;
 
+    /**
+     * @brief 沿指定 mode 与矩阵相乘。Multiply this Tensor by a matrix along a selected mode.
+     *
+     * @param matrix 左乘当前 mode fiber 的 rank-2 矩阵。Rank-2 matrix that left-multiplies fibers of the selected mode.
+     * @param mode 当前 Tensor 中被替换的 mode 轴。Mode axis in this Tensor to replace.
+     * @return mode 乘法结果 Tensor。Mode-multiplication result Tensor.
+     *
+     * @note matrix shape 必须是 [new_extent, shape()[mode]]；输出 shape 等于当前 shape，但 mode 轴 extent 替换为 new_extent。
+     *       matrix shape must be [new_extent, shape()[mode]]; the output shape equals this shape with the selected mode extent replaced by new_extent.
+     */
+    [[nodiscard]] auto mode_multiply(const Tensor &matrix, size_type mode) const -> Tensor;
+
   private:
     /**
      * @brief 允许加法运算符访问私有二元运算入口。Allow the addition operator to access the private binary operation entry point.
@@ -476,6 +488,11 @@ namespace cinder
                          const Tensor &rhs,
                          const std::vector<size_type> &lhs_axes,
                          const std::vector<size_type> &rhs_axes) -> Tensor;
+
+    /**
+     * @brief 允许 mode 乘法函数构造未初始化输出 Tensor。Allow mode_multiply to construct an uninitialized output Tensor.
+     */
+    friend auto mode_multiply(const Tensor &input, const Tensor &matrix, size_type mode) -> Tensor;
 
     /**
      * @brief 不初始化 device storage 的构造标签。Construction tag for uninitialized device storage.
@@ -671,5 +688,20 @@ namespace cinder
                               const Tensor &rhs,
                               const std::vector<Tensor::size_type> &lhs_axes,
                               const std::vector<Tensor::size_type> &rhs_axes) -> Tensor;
+
+  /**
+   * @brief 沿指定 mode 计算 Tensor 与矩阵的乘法。Compute the mode multiplication of a Tensor and a matrix.
+   *
+   * @param input 输入 Tensor。Input Tensor.
+   * @param matrix 左乘 mode fiber 的 rank-2 矩阵。Rank-2 matrix that left-multiplies mode fibers.
+   * @param mode 输入 Tensor 中被替换的 mode 轴。Mode axis in the input Tensor to replace.
+   * @return mode 乘法结果 Tensor。Mode-multiplication result Tensor.
+   *
+   * @note 若 input 的 shape 为 [I0, ..., In, ..., Ik]，matrix shape 为 [J, In]，
+   *       则输出 shape 为 [I0, ..., J, ..., Ik]，且沿 mode 坐标做乘积求和。
+   *       If input shape is [I0, ..., In, ..., Ik] and matrix shape is [J, In],
+   *       then output shape is [I0, ..., J, ..., Ik], with a sum of products along the selected mode coordinate.
+   */
+  [[nodiscard]] auto mode_multiply(const Tensor &input, const Tensor &matrix, Tensor::size_type mode) -> Tensor;
 
 } // namespace cinder

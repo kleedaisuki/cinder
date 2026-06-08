@@ -103,14 +103,42 @@ def contract_reference(
     return output_shape, output_values
 
 
+def mode_multiply_reference(
+    input_shape: list[int],
+    input_values: list[float],
+    matrix_shape: list[int],
+    matrix_values: list[float],
+    mode: int,
+) -> tuple[list[int], list[float]]:
+    output_shape = input_shape.copy()
+    output_shape[mode] = matrix_shape[0]
+    output_values: list[float] = []
+
+    for output_linear in range(math.prod(output_shape)):
+        output_coordinates = unravel_row_major(output_shape, output_linear)
+        input_indices = output_coordinates.copy()
+        matrix_row = output_coordinates[mode]
+        total = 0.0
+
+        for mode_coordinate in range(input_shape[mode]):
+            input_indices[mode] = mode_coordinate
+            matrix_offset = (matrix_row * matrix_shape[1]) + mode_coordinate
+            total += input_values[row_major_offset(input_shape, input_indices)] * matrix_values[matrix_offset]
+
+        output_values.append(total)
+
+    return output_shape, output_values
+
+
 def test_public_api_exposes_tensor_only() -> None:
     assert cinder.__all__ == ["Tensor"]
     assert cinder.Tensor is core.Tensor
     assert hasattr(Tensor, "tensor_product")
     assert hasattr(Tensor, "transpose")
     assert hasattr(Tensor, "contract")
+    assert hasattr(Tensor, "mode_multiply")
 
-    for name in ("add", "subtract", "multiply", "divide", "tensor_product", "transpose", "contract"):
+    for name in ("add", "subtract", "multiply", "divide", "tensor_product", "transpose", "contract", "mode_multiply"):
         assert not hasattr(cinder, name)
         assert not hasattr(core, name)
 
@@ -306,6 +334,46 @@ def test_tensor_contract_zero_free_extent_preserves_shape() -> None:
     assert_tensor(lhs.contract(rhs, [2], [0]), [2, 0], [])
 
 
+def test_tensor_mode_multiply_matrix_mode_1() -> None:
+    tensor = Tensor([2, 3], [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+    matrix = Tensor([2, 3], [10.0, 20.0, 30.0, -1.0, 0.0, 2.0])
+
+    assert_tensor(tensor.mode_multiply(matrix, 1), [2, 2], [140.0, 5.0, 320.0, 8.0])
+
+
+def test_tensor_mode_multiply_higher_rank_preserves_axis_order() -> None:
+    input_shape = [2, 3, 4]
+    matrix_shape = [5, 3]
+    input_values = [float(index + 1) for index in range(math.prod(input_shape))]
+    matrix_values = [float((index % 7) - 3) for index in range(math.prod(matrix_shape))]
+    output_shape, output_values = mode_multiply_reference(input_shape, input_values, matrix_shape, matrix_values, 1)
+
+    result = Tensor(input_shape, input_values).mode_multiply(Tensor(matrix_shape, matrix_values), 1)
+
+    assert_tensor(result, output_shape, output_values)
+
+
+def test_tensor_mode_multiply_mode_0_matches_left_matrix_multiply() -> None:
+    tensor = Tensor([3, 2], [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+    matrix = Tensor([2, 3], [7.0, 8.0, 9.0, -1.0, 0.5, 2.0])
+
+    assert_tensor(tensor.mode_multiply(matrix, 0), [2, 2], [76.0, 100.0, 10.5, 12.0])
+
+
+def test_tensor_mode_multiply_zero_mode_extent_returns_zero_sum() -> None:
+    tensor = Tensor([2, 0, 3])
+    matrix = Tensor([4, 0])
+
+    assert_tensor(tensor.mode_multiply(matrix, 1), [2, 4, 3], [0.0] * 24)
+
+
+def test_tensor_mode_multiply_zero_output_extent_preserves_shape() -> None:
+    tensor = Tensor([2, 3])
+    matrix = Tensor([0, 3])
+
+    assert_tensor(tensor.mode_multiply(matrix, 1), [2, 0], [])
+
+
 def test_tensor_division_follows_float32_cuda_semantics_for_zero_divisor() -> None:
     result = Tensor([3], [1.0, -1.0, 0.0]) / Tensor([3], [0.0, 0.0, 0.0])
     values = result.to_list()
@@ -354,6 +422,7 @@ def test_tensor_rejects_shape_mismatch(lhs_shape: list[int], rhs_shape: list[int
         lambda tensor: tensor.tensor_product(object()),
         lambda tensor: tensor.transpose(object()),
         lambda tensor: tensor.contract(object(), [], []),
+        lambda tensor: tensor.mode_multiply(object(), 0),
     ],
 )
 def test_tensor_rejects_non_tensor_operands(expression) -> None:
@@ -406,3 +475,19 @@ def test_tensor_contract_rejects_invalid_axes(lhs_axes: list[int], rhs_axes: lis
 
     with pytest.raises(ValueError, match=error):
         lhs.contract(rhs, lhs_axes, rhs_axes)
+
+
+@pytest.mark.parametrize(
+    ("matrix_shape", "mode", "error"),
+    [
+        ([3], 0, "rank 2"),
+        ([2, 4], 1, "input extent"),
+        ([2, 2], 2, "out of range"),
+    ],
+)
+def test_tensor_mode_multiply_rejects_invalid_inputs(matrix_shape: list[int], mode: int, error: str) -> None:
+    tensor = Tensor([2, 3], [1.0] * 6)
+    matrix = Tensor(matrix_shape, [1.0] * math.prod(matrix_shape))
+
+    with pytest.raises(ValueError, match=error):
+        tensor.mode_multiply(matrix, mode)

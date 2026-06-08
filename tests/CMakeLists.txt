@@ -1,7 +1,16 @@
 find_package(Python COMPONENTS Interpreter REQUIRED)
 
+set(cinder_tensor_smoke_source tensor_smoke.cu)
+
+if(NOT CINDER_ENABLE_CUDA)
+  set_source_files_properties(${cinder_tensor_smoke_source}
+    PROPERTIES
+      LANGUAGE CXX
+  )
+endif()
+
 add_executable(cinder_tensor_smoke
-  tensor_smoke.cpp
+  ${cinder_tensor_smoke_source}
 )
 
 target_include_directories(cinder_tensor_smoke

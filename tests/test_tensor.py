@@ -27,10 +27,13 @@ def assert_tensor(tensor: object, shape: list[int], values: list[float]) -> None
 def test_public_api_exposes_tensor_only() -> None:
     assert cinder.__all__ == ["Tensor"]
     assert cinder.Tensor is core.Tensor
+    assert hasattr(Tensor, "tensor_product")
 
-    for name in ("add", "subtract", "multiply", "divide"):
+    for name in ("add", "subtract", "multiply", "divide", "tensor_product"):
         assert not hasattr(cinder, name)
         assert not hasattr(core, name)
+
+    for name in ("add", "subtract", "multiply", "divide"):
         assert not hasattr(Tensor, name)
 
 
@@ -109,6 +112,35 @@ def test_tensor_operations_do_not_mutate_inputs() -> None:
     assert_tensor(rhs, [3], [10.0, 20.0, 30.0])
 
 
+def test_tensor_product_vector_outer_product() -> None:
+    lhs = Tensor([2], [1.0, 2.0])
+    rhs = Tensor([3], [10.0, 20.0, 30.0])
+
+    assert_tensor(lhs.tensor_product(rhs), [2, 3], [10.0, 20.0, 30.0, 20.0, 40.0, 60.0])
+
+
+def test_tensor_product_concatenates_higher_rank_shapes() -> None:
+    lhs = Tensor([2, 2], [1.0, 2.0, 3.0, 4.0])
+    rhs = Tensor([2], [-1.0, 5.0])
+
+    assert_tensor(lhs.tensor_product(rhs), [2, 2, 2], [-1.0, 5.0, -2.0, 10.0, -3.0, 15.0, -4.0, 20.0])
+
+
+def test_tensor_product_with_scalar_tensor() -> None:
+    scalar = Tensor([], [3.0])
+    tensor = Tensor([2, 2], [1.0, -2.0, 4.0, 0.5])
+
+    assert_tensor(scalar.tensor_product(tensor), [2, 2], [3.0, -6.0, 12.0, 1.5])
+    assert_tensor(tensor.tensor_product(scalar), [2, 2], [3.0, -6.0, 12.0, 1.5])
+
+
+def test_tensor_product_zero_extent_preserves_concatenated_shape() -> None:
+    lhs = Tensor([2, 0])
+    rhs = Tensor([3])
+
+    assert_tensor(lhs.tensor_product(rhs), [2, 0, 3], [])
+
+
 def test_tensor_division_follows_float32_cuda_semantics_for_zero_divisor() -> None:
     result = Tensor([3], [1.0, -1.0, 0.0]) / Tensor([3], [0.0, 0.0, 0.0])
     values = result.to_list()
@@ -154,6 +186,7 @@ def test_tensor_rejects_shape_mismatch(lhs_shape: list[int], rhs_shape: list[int
         lambda tensor: 1.0 + tensor,
         lambda tensor: tensor - object(),
         lambda tensor: object() * tensor,
+        lambda tensor: tensor.tensor_product(object()),
     ],
 )
 def test_tensor_rejects_non_tensor_operands(expression) -> None:

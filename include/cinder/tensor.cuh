@@ -386,6 +386,17 @@ namespace cinder
      */
     [[nodiscard]] auto to_vector() const -> std::vector<value_type>;
 
+    /**
+     * @brief 计算当前 Tensor 与另一个 Tensor 的张量积。Compute the tensor product of this Tensor and another Tensor.
+     *
+     * @param rhs 右侧 Tensor。Right-hand side Tensor.
+     * @return 张量积结果 Tensor。Tensor product result Tensor.
+     *
+     * @note 输出 shape 为左右输入 shape 的拼接；输出 data 由单个 CUDA kernel 写入。
+     *       The output shape is the concatenation of the input shapes; output data is written by one CUDA kernel.
+     */
+    [[nodiscard]] auto tensor_product(const Tensor &rhs) const -> Tensor;
+
   private:
     /**
      * @brief 允许加法运算符访问私有二元运算入口。Allow the addition operator to access the private binary operation entry point.
@@ -406,6 +417,11 @@ namespace cinder
      * @brief 允许除法运算符访问私有二元运算入口。Allow the division operator to access the private binary operation entry point.
      */
     friend auto operator/(const Tensor &lhs, const Tensor &rhs) -> Tensor;
+
+    /**
+     * @brief 允许张量积函数构造未初始化输出 Tensor。Allow tensor_product to construct an uninitialized output Tensor.
+     */
+    friend auto tensor_product(const Tensor &lhs, const Tensor &rhs) -> Tensor;
 
     /**
      * @brief 不初始化 device storage 的构造标签。Construction tag for uninitialized device storage.
@@ -543,5 +559,19 @@ namespace cinder
    * @return 除法结果 Tensor。Division result Tensor.
    */
   [[nodiscard]] auto operator/(const Tensor &lhs, const Tensor &rhs) -> Tensor;
+
+  /**
+   * @brief 计算两个 Tensor 的张量积。Compute the tensor product of two Tensors.
+   *
+   * @param lhs 左侧 Tensor。Left-hand side Tensor.
+   * @param rhs 右侧 Tensor。Right-hand side Tensor.
+   * @return 张量积结果 Tensor。Tensor product result Tensor.
+   *
+   * @note 对 dense row-major storage，输出 shape 为 lhs.shape() + rhs.shape()，
+   *       且 output.linear(i * rhs.size() + j) = lhs.linear(i) * rhs.linear(j)。
+   *       For dense row-major storage, the output shape is lhs.shape() + rhs.shape(),
+   *       and output.linear(i * rhs.size() + j) = lhs.linear(i) * rhs.linear(j).
+   */
+  [[nodiscard]] auto tensor_product(const Tensor &lhs, const Tensor &rhs) -> Tensor;
 
 } // namespace cinder

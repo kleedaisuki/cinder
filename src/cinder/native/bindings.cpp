@@ -138,6 +138,15 @@ namespace
             Copy Tensor data back to a Python list.
             )pbdoc")
         .def(
+            "tensor_product",
+            &cinder::Tensor::tensor_product,
+            py::arg("other"),
+            R"pbdoc(
+            返回当前 Tensor 与另一个 Tensor 的张量积。
+
+            Return the tensor product of this Tensor and another Tensor.
+            )pbdoc")
+        .def(
             "__add__",
             [](const cinder::Tensor &lhs, const cinder::Tensor &rhs) {
               return lhs + rhs;

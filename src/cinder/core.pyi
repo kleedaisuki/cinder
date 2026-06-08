@@ -45,6 +45,10 @@ class Tensor:
         """Copy dense row-major tensor data from CUDA device memory to Python."""
         ...
 
+    def tensor_product(self, other: Tensor) -> Tensor:
+        """Return the tensor product of ``self`` and ``other``."""
+        ...
+
     def __add__(self, other: Tensor) -> Tensor:
         """Return elementwise ``self + other``."""
         ...

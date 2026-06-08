@@ -46,6 +46,28 @@ class Tensor:
         """Copy dense row-major tensor data from CUDA device memory to Python."""
         ...
 
+    def reshape(self, shape: Sequence[int]) -> Tensor:
+        """Return a dense tensor with ``shape`` and the same row-major data order."""
+        ...
+
+    def broadcast(self, shape: Sequence[int]) -> Tensor:
+        """Return a dense tensor broadcast to ``shape``."""
+        ...
+
+    def slice(self, starts: Sequence[int], shape: Sequence[int]) -> Tensor:
+        """Return a dense slice copy starting at ``starts`` with ``shape`` extents."""
+        ...
+
+    @overload
+    def concat(self, other: Tensor, axis: int) -> Tensor:
+        """Concatenate ``self`` and ``other`` along ``axis``."""
+        ...
+
+    @overload
+    def concat(self, other: Sequence[Tensor], axis: int) -> Tensor:
+        """Concatenate ``self`` and a sequence of tensors along ``axis``."""
+        ...
+
     def tensor_product(self, other: Tensor) -> Tensor:
         """Return the tensor product of ``self`` and ``other``."""
         ...

@@ -68,6 +68,48 @@ namespace
   }
 
   /**
+   * @brief 拼接当前 Tensor 与 Python 序列中的多个 Tensor。Concatenate this Tensor with multiple Tensors from a Python sequence.
+   *
+   * @param tensor 当前 Tensor。Current Tensor.
+   * @param others 其他 Tensor 序列。Sequence of other Tensors.
+   * @param axis 拼接轴。Concatenation axis.
+   * @return concat 结果 Tensor。Concatenation result Tensor.
+   */
+  [[nodiscard]] auto tensor_concat_sequence(const cinder::Tensor &tensor,
+                                            py::sequence others,
+                                            cinder::Tensor::size_type axis) -> cinder::Tensor
+  {
+    /**
+     * @brief 非拥有输入 Tensor 指针列表。Non-owning input Tensor pointer list.
+     */
+    std::vector<const cinder::Tensor *> inputs;
+
+    inputs.reserve(1U + static_cast<std::size_t>(py::len(others)));
+    inputs.push_back(&tensor);
+
+    for (const auto item : others)
+    {
+      /**
+       * @brief 当前 Python 对象中持有的 Tensor 引用。Tensor reference held by the current Python object.
+       */
+      const cinder::Tensor *other = nullptr;
+
+      try
+      {
+        other = &item.cast<const cinder::Tensor &>();
+      }
+      catch (const py::cast_error &)
+      {
+        throw py::type_error("Tensor concat sequence entries must be Tensor objects");
+      }
+
+      inputs.push_back(other);
+    }
+
+    return cinder::concat(inputs, axis);
+  }
+
+  /**
    * @brief 注册 Tensor Python binding。Register Tensor Python bindings.
    *
    * @param module Python 模块对象。Python module object.
@@ -136,6 +178,56 @@ namespace
             把 Tensor data 拷回 Python list。
 
             Copy Tensor data back to a Python list.
+            )pbdoc")
+        .def(
+            "reshape",
+            &cinder::Tensor::reshape,
+            py::arg("shape"),
+            R"pbdoc(
+            返回具有新 shape 的 dense Tensor。
+
+            Return a dense Tensor with a new shape.
+            )pbdoc")
+        .def(
+            "broadcast",
+            &cinder::Tensor::broadcast,
+            py::arg("shape"),
+            R"pbdoc(
+            按广播规则返回具有目标 shape 的 dense Tensor。
+
+            Return a dense Tensor with the target shape by broadcasting.
+            )pbdoc")
+        .def(
+            "slice",
+            &cinder::Tensor::slice,
+            py::arg("starts"),
+            py::arg("shape"),
+            R"pbdoc(
+            返回当前 Tensor 的 dense 切片副本。
+
+            Return a dense slice copy of the current Tensor.
+            )pbdoc")
+        .def(
+            "concat",
+            [](const cinder::Tensor &lhs, const cinder::Tensor &rhs, cinder::Tensor::size_type axis) {
+              return lhs.concat(rhs, axis);
+            },
+            py::arg("other"),
+            py::arg("axis"),
+            R"pbdoc(
+            沿指定轴与另一个 Tensor 拼接。
+
+            Concatenate this Tensor with another Tensor along an axis.
+            )pbdoc")
+        .def(
+            "concat",
+            &tensor_concat_sequence,
+            py::arg("others"),
+            py::arg("axis"),
+            R"pbdoc(
+            沿指定轴与多个 Tensor 拼接。
+
+            Concatenate this Tensor with multiple Tensors along an axis.
             )pbdoc")
         .def(
             "tensor_product",

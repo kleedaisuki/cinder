@@ -67,6 +67,7 @@ if(CINDER_ENABLE_CUDA)
     tensor_product.cu
     tensor_contraction.cu
     tensor_transpose.cu
+    tensor_shape_ops.cu
     tensor_mode_multiply.cu
     tensor_scalar_reduction.cu
   )

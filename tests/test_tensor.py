@@ -60,6 +60,68 @@ def transpose_reference(shape: list[int], values: list[float], axes: list[int]) 
     return output_shape, output_values
 
 
+def broadcast_reference(input_shape: list[int], values: list[float], output_shape: list[int]) -> list[float]:
+    output_values: list[float] = []
+    leading_rank = len(output_shape) - len(input_shape)
+
+    for output_linear in range(math.prod(output_shape)):
+        output_coordinates = unravel_row_major(output_shape, output_linear)
+        input_indices: list[int] = []
+
+        for input_axis, input_extent in enumerate(input_shape):
+            output_coordinate = output_coordinates[leading_rank + input_axis]
+            input_indices.append(0 if input_extent == 1 else output_coordinate)
+
+        output_values.append(values[row_major_offset(input_shape, input_indices)])
+
+    return output_values
+
+
+def slice_reference(
+    input_shape: list[int],
+    values: list[float],
+    starts: list[int],
+    output_shape: list[int],
+) -> list[float]:
+    output_values: list[float] = []
+
+    for output_linear in range(math.prod(output_shape)):
+        output_coordinates = unravel_row_major(output_shape, output_linear)
+        input_indices = [start + coordinate for start, coordinate in zip(starts, output_coordinates)]
+        output_values.append(values[row_major_offset(input_shape, input_indices)])
+
+    return output_values
+
+
+def concat_reference(
+    input_shapes: list[list[int]],
+    input_values: list[list[float]],
+    axis: int,
+) -> tuple[list[int], list[float]]:
+    output_shape = input_shapes[0].copy()
+    output_shape[axis] = sum(shape[axis] for shape in input_shapes)
+    axis_offsets = [0]
+
+    for shape in input_shapes:
+        axis_offsets.append(axis_offsets[-1] + shape[axis])
+
+    output_values: list[float] = []
+
+    for output_linear in range(math.prod(output_shape)):
+        output_coordinates = unravel_row_major(output_shape, output_linear)
+        axis_coordinate = output_coordinates[axis]
+        input_index = 0
+
+        while (input_index + 1) < len(input_shapes) and axis_coordinate >= axis_offsets[input_index + 1]:
+            input_index += 1
+
+        input_coordinates = output_coordinates.copy()
+        input_coordinates[axis] -= axis_offsets[input_index]
+        output_values.append(input_values[input_index][row_major_offset(input_shapes[input_index], input_coordinates)])
+
+    return output_shape, output_values
+
+
 def contract_reference(
     lhs_shape: list[int],
     lhs_values: list[float],
@@ -134,6 +196,10 @@ def test_public_api_exposes_tensor_only() -> None:
     assert cinder.__all__ == ["Tensor"]
     assert cinder.Tensor is core.Tensor
     assert hasattr(Tensor, "tensor_product")
+    assert hasattr(Tensor, "reshape")
+    assert hasattr(Tensor, "broadcast")
+    assert hasattr(Tensor, "slice")
+    assert hasattr(Tensor, "concat")
     assert hasattr(Tensor, "transpose")
     assert hasattr(Tensor, "contract")
     assert hasattr(Tensor, "mode_multiply")
@@ -146,6 +212,10 @@ def test_public_api_exposes_tensor_only() -> None:
         "subtract",
         "multiply",
         "divide",
+        "reshape",
+        "broadcast",
+        "slice",
+        "concat",
         "tensor_product",
         "transpose",
         "contract",
@@ -256,6 +326,98 @@ def test_tensor_operations_do_not_mutate_inputs() -> None:
 
     assert_tensor(lhs, [3], [1.0, 2.0, 3.0])
     assert_tensor(rhs, [3], [10.0, 20.0, 30.0])
+
+
+def test_tensor_reshape_preserves_dense_row_major_order() -> None:
+    values = [float(index + 1) for index in range(6)]
+    tensor = Tensor([2, 3], values)
+
+    assert_tensor(tensor.reshape([3, 2]), [3, 2], values)
+    assert_tensor(tensor.reshape([6]), [6], values)
+
+
+def test_tensor_reshape_supports_scalar_and_zero_extent_shapes() -> None:
+    scalar = Tensor([1], [9.0]).reshape([])
+    zero_extent = Tensor([2, 0, 3]).reshape([0, 6])
+
+    assert_tensor(scalar, [], [9.0])
+    assert_tensor(zero_extent, [0, 6], [])
+
+
+def test_tensor_broadcast_vector_to_matrix() -> None:
+    tensor = Tensor([3], [1.0, 2.0, 3.0])
+
+    assert_tensor(tensor.broadcast([2, 3]), [2, 3], [1.0, 2.0, 3.0, 1.0, 2.0, 3.0])
+
+
+def test_tensor_broadcast_higher_rank_with_singleton_axes() -> None:
+    input_shape = [2, 1, 3]
+    output_shape = [2, 4, 3]
+    values = [1.0, 2.0, 3.0, 10.0, 20.0, 30.0]
+
+    assert_tensor(
+        Tensor(input_shape, values).broadcast(output_shape),
+        output_shape,
+        broadcast_reference(input_shape, values, output_shape),
+    )
+
+
+def test_tensor_broadcast_scalar_and_zero_extent_shapes() -> None:
+    assert_tensor(Tensor([], [5.0]).broadcast([2, 2]), [2, 2], [5.0, 5.0, 5.0, 5.0])
+    assert_tensor(Tensor([1, 0, 3]).broadcast([2, 0, 3]), [2, 0, 3], [])
+
+
+def test_tensor_slice_matrix_window() -> None:
+    shape = [3, 4]
+    values = [float(index + 1) for index in range(math.prod(shape))]
+    starts = [1, 1]
+    output_shape = [2, 2]
+
+    assert_tensor(
+        Tensor(shape, values).slice(starts, output_shape),
+        output_shape,
+        slice_reference(shape, values, starts, output_shape),
+    )
+
+
+def test_tensor_slice_supports_scalar_and_zero_extent_outputs() -> None:
+    assert_tensor(Tensor([], [7.0]).slice([], []), [], [7.0])
+    assert_tensor(Tensor([2, 0, 3]).slice([0, 0, 1], [2, 0, 1]), [2, 0, 1], [])
+
+
+def test_tensor_concat_binary_axis_zero() -> None:
+    lhs = Tensor([2, 2], [1.0, 2.0, 3.0, 4.0])
+    rhs = Tensor([1, 2], [5.0, 6.0])
+
+    assert_tensor(lhs.concat(rhs, 0), [3, 2], [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+
+
+def test_tensor_concat_sequence_uses_single_public_operation() -> None:
+    lhs_shape = [2, 2]
+    middle_shape = [2, 1]
+    rhs_shape = [2, 3]
+    lhs_values = [1.0, 2.0, 3.0, 4.0]
+    middle_values = [5.0, 6.0]
+    rhs_values = [7.0, 8.0, 9.0, 10.0, 11.0, 12.0]
+    output_shape, output_values = concat_reference(
+        [lhs_shape, middle_shape, rhs_shape],
+        [lhs_values, middle_values, rhs_values],
+        1,
+    )
+
+    result = Tensor(lhs_shape, lhs_values).concat(
+        [Tensor(middle_shape, middle_values), Tensor(rhs_shape, rhs_values)],
+        1,
+    )
+
+    assert_tensor(result, output_shape, output_values)
+
+
+def test_tensor_concat_skips_zero_extent_inputs_on_concat_axis() -> None:
+    lhs = Tensor([2, 0])
+    rhs = Tensor([2, 3], [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+
+    assert_tensor(lhs.concat(rhs, 1), [2, 3], [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
 
 
 def test_tensor_transpose_matrix_default_reverses_axes() -> None:
@@ -511,6 +673,12 @@ def test_tensor_rejects_shape_mismatch(lhs_shape: list[int], rhs_shape: list[int
         lambda tensor: object() + tensor,
         lambda tensor: tensor - object(),
         lambda tensor: object() * tensor,
+        lambda tensor: tensor.reshape(object()),
+        lambda tensor: tensor.broadcast(object()),
+        lambda tensor: tensor.slice(object(), []),
+        lambda tensor: tensor.slice([], object()),
+        lambda tensor: tensor.concat(object(), 0),
+        lambda tensor: tensor.concat([object()], 0),
         lambda tensor: tensor.tensor_product(object()),
         lambda tensor: tensor.transpose(object()),
         lambda tensor: tensor.contract(object(), [], []),
@@ -537,6 +705,59 @@ def test_tensor_rejects_non_tensor_operands(expression) -> None:
 def test_tensor_rejects_invalid_constructor_arguments(args: tuple[object, ...], error: type[Exception]) -> None:
     with pytest.raises(error):
         Tensor(*args)
+
+
+def test_tensor_reshape_rejects_element_count_mismatch() -> None:
+    tensor = Tensor([2, 3], [1.0] * 6)
+
+    with pytest.raises(ValueError, match="element count"):
+        tensor.reshape([5])
+
+
+@pytest.mark.parametrize(
+    ("shape", "error"),
+    [
+        ([2], "target rank"),
+        ([2, 2], "incompatible"),
+        ([1, 2, 4], "incompatible"),
+    ],
+)
+def test_tensor_broadcast_rejects_invalid_shapes(shape: list[int], error: str) -> None:
+    tensor = Tensor([2, 3], [1.0] * 6)
+
+    with pytest.raises(ValueError, match=error):
+        tensor.broadcast(shape)
+
+
+@pytest.mark.parametrize(
+    ("starts", "shape", "error"),
+    [
+        ([0], [1], "match Tensor rank"),
+        ([3, 0], [0, 1], "start"),
+        ([1, 2], [2, 2], "extent"),
+    ],
+)
+def test_tensor_slice_rejects_invalid_windows(starts: list[int], shape: list[int], error: str) -> None:
+    tensor = Tensor([2, 3], [1.0] * 6)
+
+    with pytest.raises(ValueError, match=error):
+        tensor.slice(starts, shape)
+
+
+@pytest.mark.parametrize(
+    ("rhs_shape", "axis", "error"),
+    [
+        ([2, 3], 2, "axis"),
+        ([2], 0, "same rank"),
+        ([3, 4], 0, "non-axis"),
+    ],
+)
+def test_tensor_concat_rejects_invalid_inputs(rhs_shape: list[int], axis: int, error: str) -> None:
+    lhs = Tensor([2, 3], [1.0] * 6)
+    rhs = Tensor(rhs_shape, [1.0] * math.prod(rhs_shape))
+
+    with pytest.raises(ValueError, match=error):
+        lhs.concat(rhs, axis)
 
 
 @pytest.mark.parametrize(

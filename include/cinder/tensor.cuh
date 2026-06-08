@@ -387,6 +387,53 @@ namespace cinder
     [[nodiscard]] auto to_vector() const -> std::vector<value_type>;
 
     /**
+     * @brief 返回具有新 shape 的 dense Tensor。Return a dense Tensor with a new shape.
+     *
+     * @param extents 新 Tensor 每个轴的 extent。Per-axis extents of the new Tensor.
+     * @return reshape 结果 Tensor。Reshaped result Tensor.
+     *
+     * @note 新 shape 的元素总数必须等于当前 Tensor 的元素总数；该操作保留 dense row-major 线性顺序。
+     *       The new shape must have the same element count as the current Tensor; this operation preserves dense row-major linear order.
+     */
+    [[nodiscard]] auto reshape(const std::vector<size_type> &extents) const -> Tensor;
+
+    /**
+     * @brief 按广播规则返回具有目标 shape 的 dense Tensor。Return a dense Tensor with the target shape by broadcasting.
+     *
+     * @param extents 目标 Tensor 每个轴的 extent。Per-axis extents of the target Tensor.
+     * @return broadcast 结果 Tensor。Broadcast result Tensor.
+     *
+     * @note 广播规则按尾部轴对齐；输入轴 extent 必须等于输出 extent 或为 1。
+     *       Broadcasting aligns trailing axes; each input extent must equal the output extent or be 1.
+     */
+    [[nodiscard]] auto broadcast(const std::vector<size_type> &extents) const -> Tensor;
+
+    /**
+     * @brief 返回当前 Tensor 的 dense 切片副本。Return a dense slice copy of the current Tensor.
+     *
+     * @param starts 每个轴的起始坐标。Per-axis start coordinates.
+     * @param extents 输出切片每个轴的 extent。Per-axis extents of the output slice.
+     * @return slice 结果 Tensor。Slice result Tensor.
+     *
+     * @note starts 与 extents 必须匹配当前 Tensor rank，且切片区间必须完全位于输入 Tensor 内。
+     *       starts and extents must match the current Tensor rank, and the slice interval must stay inside the input Tensor.
+     */
+    [[nodiscard]] auto slice(const std::vector<size_type> &starts,
+                             const std::vector<size_type> &extents) const -> Tensor;
+
+    /**
+     * @brief 沿指定轴与另一个 Tensor 拼接。Concatenate this Tensor with another Tensor along an axis.
+     *
+     * @param rhs 右侧 Tensor。Right-hand side Tensor.
+     * @param axis 拼接轴。Concatenation axis.
+     * @return concat 结果 Tensor。Concatenation result Tensor.
+     *
+     * @note 两个 Tensor 的 rank 必须相同，且除拼接轴以外的 extent 必须一致。
+     *       Both tensors must have the same rank, and all non-concatenated extents must match.
+     */
+    [[nodiscard]] auto concat(const Tensor &rhs, size_type axis) const -> Tensor;
+
+    /**
      * @brief 计算当前 Tensor 与另一个 Tensor 的张量积。Compute the tensor product of this Tensor and another Tensor.
      *
      * @param rhs 右侧 Tensor。Right-hand side Tensor.
@@ -541,6 +588,33 @@ namespace cinder
      * @brief 允许张量积函数构造未初始化输出 Tensor。Allow tensor_product to construct an uninitialized output Tensor.
      */
     friend auto tensor_product(const Tensor &lhs, const Tensor &rhs) -> Tensor;
+
+    /**
+     * @brief 允许 reshape 函数构造未初始化输出 Tensor。Allow reshape to construct an uninitialized output Tensor.
+     */
+    friend auto reshape(const Tensor &input, const std::vector<size_type> &extents) -> Tensor;
+
+    /**
+     * @brief 允许 broadcast 函数构造未初始化输出 Tensor。Allow broadcast to construct an uninitialized output Tensor.
+     */
+    friend auto broadcast(const Tensor &input, const std::vector<size_type> &extents) -> Tensor;
+
+    /**
+     * @brief 允许 slice 函数构造未初始化输出 Tensor。Allow slice to construct an uninitialized output Tensor.
+     */
+    friend auto slice(const Tensor &input,
+                      const std::vector<size_type> &starts,
+                      const std::vector<size_type> &extents) -> Tensor;
+
+    /**
+     * @brief 允许二元 concat 函数构造未初始化输出 Tensor。Allow the binary concat function to construct an uninitialized output Tensor.
+     */
+    friend auto concat(const Tensor &lhs, const Tensor &rhs, size_type axis) -> Tensor;
+
+    /**
+     * @brief 允许多输入 concat 函数构造未初始化输出 Tensor。Allow the multi-input concat function to construct an uninitialized output Tensor.
+     */
+    friend auto concat(const std::vector<const Tensor *> &inputs, size_type axis) -> Tensor;
 
     /**
      * @brief 允许默认转置函数构造未初始化输出 Tensor。Allow the default transpose function to construct an uninitialized output Tensor.
@@ -797,6 +871,70 @@ namespace cinder
    * @return 除法结果 Tensor。Division result Tensor.
    */
   [[nodiscard]] auto operator/(Tensor::value_type lhs, const Tensor &rhs) -> Tensor;
+
+  /**
+   * @brief 返回具有新 shape 的 dense Tensor。Return a dense Tensor with a new shape.
+   *
+   * @param input 输入 Tensor。Input Tensor.
+   * @param extents 新 Tensor 每个轴的 extent。Per-axis extents of the new Tensor.
+   * @return reshape 结果 Tensor。Reshaped result Tensor.
+   *
+   * @note 新 shape 的元素总数必须等于 input.size()；dense row-major 线性顺序保持不变。
+   *       The new shape must have input.size() elements; dense row-major linear order is preserved.
+   */
+  [[nodiscard]] auto reshape(const Tensor &input, const std::vector<Tensor::size_type> &extents) -> Tensor;
+
+  /**
+   * @brief 按广播规则返回具有目标 shape 的 dense Tensor。Return a dense Tensor with the target shape by broadcasting.
+   *
+   * @param input 输入 Tensor。Input Tensor.
+   * @param extents 目标 Tensor 每个轴的 extent。Per-axis extents of the target Tensor.
+   * @return broadcast 结果 Tensor。Broadcast result Tensor.
+   *
+   * @note 广播规则按尾部轴对齐；输入轴 extent 必须等于输出 extent 或为 1。
+   *       Broadcasting aligns trailing axes; each input extent must equal the output extent or be 1.
+   */
+  [[nodiscard]] auto broadcast(const Tensor &input, const std::vector<Tensor::size_type> &extents) -> Tensor;
+
+  /**
+   * @brief 返回输入 Tensor 的 dense 切片副本。Return a dense slice copy of an input Tensor.
+   *
+   * @param input 输入 Tensor。Input Tensor.
+   * @param starts 每个轴的起始坐标。Per-axis start coordinates.
+   * @param extents 输出切片每个轴的 extent。Per-axis extents of the output slice.
+   * @return slice 结果 Tensor。Slice result Tensor.
+   *
+   * @note starts 与 extents 必须匹配 input.rank()，且切片区间必须完全位于输入 Tensor 内。
+   *       starts and extents must match input.rank(), and the slice interval must stay inside the input Tensor.
+   */
+  [[nodiscard]] auto slice(const Tensor &input,
+                           const std::vector<Tensor::size_type> &starts,
+                           const std::vector<Tensor::size_type> &extents) -> Tensor;
+
+  /**
+   * @brief 沿指定轴拼接两个 Tensor。Concatenate two Tensors along an axis.
+   *
+   * @param lhs 左侧 Tensor。Left-hand side Tensor.
+   * @param rhs 右侧 Tensor。Right-hand side Tensor.
+   * @param axis 拼接轴。Concatenation axis.
+   * @return concat 结果 Tensor。Concatenation result Tensor.
+   *
+   * @note 两个 Tensor 的 rank 必须相同，且除拼接轴以外的 extent 必须一致。
+   *       Both tensors must have the same rank, and all non-concatenated extents must match.
+   */
+  [[nodiscard]] auto concat(const Tensor &lhs, const Tensor &rhs, Tensor::size_type axis) -> Tensor;
+
+  /**
+   * @brief 沿指定轴拼接多个 Tensor。Concatenate multiple Tensors along an axis.
+   *
+   * @param inputs 非拥有 Tensor 指针列表。Non-owning Tensor pointer list.
+   * @param axis 拼接轴。Concatenation axis.
+   * @return concat 结果 Tensor。Concatenation result Tensor.
+   *
+   * @note inputs 必须非空，所有指针必须非空；所有输入 rank 必须相同，且除拼接轴以外的 extent 必须一致。
+   *       inputs must be non-empty and contain only non-null pointers; all inputs must have the same rank, and all non-concatenated extents must match.
+   */
+  [[nodiscard]] auto concat(const std::vector<const Tensor *> &inputs, Tensor::size_type axis) -> Tensor;
 
   /**
    * @brief 计算两个 Tensor 的张量积。Compute the tensor product of two Tensors.
